@@ -13,7 +13,7 @@ export function StagePanel({ fullscreen = false }: StagePanelProps) {
 
   if (fullscreen) {
     return (
-      <div className="fixed inset-0 z-50 bg-black flex flex-col">
+      <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
         <div className="absolute top-4 right-4 z-10">
           <button
             onClick={stopPlaying}
@@ -23,7 +23,7 @@ export function StagePanel({ fullscreen = false }: StagePanelProps) {
             Stop
           </button>
         </div>
-        <div className="flex-1">
+        <div className="w-full h-full flex items-center justify-center">
           <PhaserCanvas isPlaying={true} />
         </div>
       </div>

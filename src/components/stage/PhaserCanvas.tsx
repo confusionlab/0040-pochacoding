@@ -44,56 +44,80 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
     }
 
     const { canvasWidth, canvasHeight, backgroundColor } = project.settings;
+    const container = containerRef.current;
 
-    // Create Phaser game
-    const config: Phaser.Types.Core.GameConfig = {
-      type: Phaser.AUTO,
-      parent: containerRef.current,
-      width: canvasWidth,
-      height: canvasHeight,
-      backgroundColor: backgroundColor,
-      scale: {
-        mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_BOTH,
-      },
-      physics: {
-        default: 'arcade',
-        arcade: {
-          gravity: { x: 0, y: 0 },
-          debug: !isPlaying,
-        },
-      },
-      scene: {
-        key: 'GameScene',
-        preload: function(this: Phaser.Scene) {
-          // Preload assets if needed
-        },
-        create: function(this: Phaser.Scene) {
-          if (isPlaying) {
-            createPlayScene(this, selectedScene, project.scenes, runtimeRef, selectScene);
-          } else {
-            createEditorScene(this, selectedScene, selectObject, selectedObjectId, handleObjectDragEnd);
-          }
-        },
-        update: function(this: Phaser.Scene) {
-          if (isPlaying && runtimeRef.current) {
-            runtimeRef.current.update();
+    // Function to create the game
+    const createGame = () => {
+      if (!container) return;
 
-            // Check for scene switch
-            const pendingSwitch = runtimeRef.current.pendingSceneSwitch;
-            if (pendingSwitch) {
-              const targetScene = project.scenes.find(s => s.name === pendingSwitch);
-              if (targetScene) {
-                runtimeRef.current.clearPendingSceneSwitch();
-                selectScene(targetScene.id);
+      const config: Phaser.Types.Core.GameConfig = {
+        type: Phaser.AUTO,
+        parent: container,
+        width: canvasWidth,
+        height: canvasHeight,
+        backgroundColor: backgroundColor,
+        scale: {
+          mode: Phaser.Scale.FIT,
+          autoCenter: Phaser.Scale.CENTER_BOTH,
+        },
+        physics: {
+          default: 'arcade',
+          arcade: {
+            gravity: { x: 0, y: 0 },
+            debug: !isPlaying,
+          },
+        },
+        scene: {
+          key: 'GameScene',
+          preload: function(this: Phaser.Scene) {
+            // Preload assets if needed
+          },
+          create: function(this: Phaser.Scene) {
+            if (isPlaying) {
+              createPlayScene(this, selectedScene, project.scenes, runtimeRef, selectScene);
+            } else {
+              createEditorScene(this, selectedScene, selectObject, selectedObjectId, handleObjectDragEnd);
+            }
+          },
+          update: function(this: Phaser.Scene) {
+            if (isPlaying && runtimeRef.current) {
+              runtimeRef.current.update();
+
+              // Check for scene switch
+              const pendingSwitch = runtimeRef.current.pendingSceneSwitch;
+              if (pendingSwitch) {
+                const targetScene = project.scenes.find(s => s.name === pendingSwitch);
+                if (targetScene) {
+                  runtimeRef.current.clearPendingSceneSwitch();
+                  selectScene(targetScene.id);
+                }
               }
             }
-          }
+          },
         },
-      },
+      };
+
+      gameRef.current = new Phaser.Game(config);
+
+      // Force scale refresh after a frame to ensure proper sizing
+      requestAnimationFrame(() => {
+        if (gameRef.current?.scale) {
+          gameRef.current.scale.refresh();
+        }
+      });
     };
 
-    gameRef.current = new Phaser.Game(config);
+    // In play mode, wait for layout to settle before creating game
+    if (isPlaying) {
+      // Use requestAnimationFrame to wait for CSS layout
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          createGame();
+        });
+      });
+    } else {
+      createGame();
+    }
 
     return () => {
       if (runtimeRef.current) {
@@ -139,8 +163,7 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
   return (
     <div
       ref={containerRef}
-      className="w-full h-full"
-      style={{ minHeight: isPlaying ? '100vh' : '300px' }}
+      className={isPlaying ? "w-full h-full" : "w-full h-full min-h-[300px]"}
     />
   );
 }
