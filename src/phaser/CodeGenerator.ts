@@ -360,11 +360,10 @@ export function generateCodeForObject(blocklyXml: string, objectId: string): str
     workspace.dispose();
 
     // Wrap in a function that receives runtime context
-    return `
-(function(runtime, spriteId, sprite) {
+    // IMPORTANT: No newline before the opening paren, or `return ${code}` will fail due to ASI
+    return `(function(runtime, spriteId, sprite) {
 ${code}
-})
-`;
+})`;
   } catch (e) {
     console.error('Code generation error for object', objectId, e);
     return '';
