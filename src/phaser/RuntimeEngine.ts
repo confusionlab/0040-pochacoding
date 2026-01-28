@@ -232,13 +232,25 @@ export class RuntimeEngine {
   // --- Event Triggering ---
 
   private triggerKeyPressed(key: string): void {
-    if (!this._isRunning) return;
+    debugLog('event', `triggerKeyPressed(${key}) called, isRunning=${this._isRunning}`);
+    if (!this._isRunning) {
+      debugLog('info', `Ignoring key press - runtime not running`);
+      return;
+    }
     for (const [spriteId, h] of this.handlers) {
       const sprite = this.sprites.get(spriteId);
       if (sprite?.isStopped()) continue;
       const keyHandlers = h.onKeyPressed.get(key);
+      debugLog('info', `Checking handlers for sprite ${spriteId}: has ${key} handlers = ${!!keyHandlers}, count = ${keyHandlers?.length || 0}`);
       if (keyHandlers) {
-        keyHandlers.forEach(handler => handler());
+        debugLog('event', `Executing ${keyHandlers.length} handler(s) for key ${key}`);
+        keyHandlers.forEach(handler => {
+          try {
+            handler();
+          } catch (e) {
+            debugLog('error', `Error in key handler: ${e}`);
+          }
+        });
       }
     }
   }

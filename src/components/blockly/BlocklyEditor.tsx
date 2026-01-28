@@ -67,9 +67,17 @@ export function BlocklyEditor() {
         const sceneId = currentSceneIdRef.current;
         const objectId = currentObjectIdRef.current;
         if (!workspaceRef.current || !sceneId || !objectId) return;
-        const xml = Blockly.Xml.workspaceToDom(workspaceRef.current);
-        const xmlText = Blockly.Xml.domToText(xml);
-        useProjectStore.getState().updateObject(sceneId, objectId, { blocklyXml: xmlText });
+
+        // Check if workspace has any blocks
+        const topBlocks = workspaceRef.current.getTopBlocks(false);
+        if (topBlocks.length === 0) {
+          // No blocks - clear the XML
+          useProjectStore.getState().updateObject(sceneId, objectId, { blocklyXml: '' });
+        } else {
+          const xml = Blockly.Xml.workspaceToDom(workspaceRef.current);
+          const xmlText = Blockly.Xml.domToText(xml);
+          useProjectStore.getState().updateObject(sceneId, objectId, { blocklyXml: xmlText });
+        }
       }
     });
 

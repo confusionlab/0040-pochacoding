@@ -262,22 +262,36 @@ function createPlayScene(
     const runtimeSprite = runtime.registerSprite(obj.id, obj.name, container);
 
     // Generate and execute code for this object
+    console.log(`[CodeExec] Object "${obj.name}" has blocklyXml:`, !!obj.blocklyXml);
     if (obj.blocklyXml) {
+      console.log(`[CodeExec] blocklyXml length: ${obj.blocklyXml.length}`);
+      console.log(`[CodeExec] blocklyXml preview: ${obj.blocklyXml.substring(0, 200)}...`);
       try {
         const code = generateCodeForObject(obj.blocklyXml, obj.id);
+        console.log(`[CodeExec] Generated code for "${obj.name}":\n${code}`);
         if (code) {
           // Execute the generated code
-          const execFunction = new Function('runtime', 'spriteId', 'sprite', `
-            return ${code};
-          `);
+          const functionBody = `return ${code};`;
+          console.log(`[CodeExec] Function body:\n${functionBody}`);
+          const execFunction = new Function('runtime', 'spriteId', 'sprite', functionBody);
+          console.log(`[CodeExec] execFunction created, calling it...`);
           const registerFunc = execFunction(runtime, obj.id, runtimeSprite);
+          console.log(`[CodeExec] registerFunc type: ${typeof registerFunc}`);
           if (typeof registerFunc === 'function') {
+            console.log(`[CodeExec] Calling registerFunc...`);
             registerFunc(runtime, obj.id, runtimeSprite);
+            console.log(`[CodeExec] registerFunc called successfully`);
+          } else {
+            console.error(`[CodeExec] registerFunc is not a function! Got: ${registerFunc}`);
           }
+        } else {
+          console.log(`[CodeExec] No code generated for "${obj.name}"`);
         }
       } catch (e) {
         console.error('Error executing code for object', obj.name, e);
       }
+    } else {
+      console.log(`[CodeExec] No blocklyXml for "${obj.name}"`);
     }
   });
 

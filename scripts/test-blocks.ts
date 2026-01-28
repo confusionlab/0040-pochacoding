@@ -8,7 +8,7 @@ import { javascriptGenerator } from 'blockly/javascript';
 
 // Import and run block registration
 import '../src/components/blockly/toolbox';
-import { registerCodeGenerators } from '../src/phaser/CodeGenerator';
+import { registerCodeGenerators, generateCodeForObject } from '../src/phaser/CodeGenerator';
 
 registerCodeGenerators();
 
@@ -16,10 +16,25 @@ interface TestCase {
   name: string;
   xml: string;
   expectCodeContains?: string[];
+  expectEmptyCode?: boolean;  // Code should be empty
   expectNoError?: boolean;
 }
 
 const testCases: TestCase[] = [
+  // Test that orphan blocks (without events) don't generate code
+  {
+    name: 'orphan block without event should not generate code',
+    xml: `
+      <xml>
+        <block type="motion_change_x">
+          <value name="VALUE">
+            <block type="math_number"><field name="NUM">10</field></block>
+          </value>
+        </block>
+      </xml>
+    `,
+    expectEmptyCode: true, // Should be empty - no event block
+  },
   // Event blocks with nested statements
   {
     name: 'event_game_start with motion_change_x',
@@ -259,21 +274,31 @@ function runTests(): void {
 
   for (const test of testCases) {
     try {
-      // Create workspace
-      const workspace = new Blockly.Workspace();
+      let code: string;
 
-      // Load XML
-      const dom = Blockly.utils.xml.textToDom(test.xml);
-      Blockly.Xml.domToWorkspace(dom, workspace);
-
-      // Generate code
-      const code = javascriptGenerator.workspaceToCode(workspace);
+      if (test.expectEmptyCode) {
+        // Use generateCodeForObject for testing hat block filtering
+        code = generateCodeForObject(test.xml, 'test-object');
+      } else {
+        // Create workspace and use raw code generation
+        const workspace = new Blockly.Workspace();
+        const dom = Blockly.utils.xml.textToDom(test.xml);
+        Blockly.Xml.domToWorkspace(dom, workspace);
+        code = javascriptGenerator.workspaceToCode(workspace);
+        workspace.dispose();
+      }
 
       // Check expectations
       let testPassed = true;
       const missingParts: string[] = [];
 
-      if (test.expectCodeContains) {
+      if (test.expectEmptyCode) {
+        // Check that code is empty or just whitespace
+        if (code.trim() !== '') {
+          testPassed = false;
+          missingParts.push('(expected empty code)');
+        }
+      } else if (test.expectCodeContains) {
         for (const expected of test.expectCodeContains) {
           if (!code.includes(expected)) {
             testPassed = false;
@@ -281,9 +306,6 @@ function runTests(): void {
           }
         }
       }
-
-      // Cleanup
-      workspace.dispose();
 
       if (testPassed) {
         console.log(`✓ ${test.name}`);

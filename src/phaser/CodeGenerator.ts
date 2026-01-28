@@ -338,9 +338,21 @@ export function registerCodeGenerators(): void {
   };
 }
 
+// Hat blocks (event blocks) that start code execution
+const HAT_BLOCKS = [
+  'event_game_start',
+  'event_key_pressed',
+  'event_clicked',
+  'event_forever',
+  'event_when_receive',
+  'event_when_touching',
+  'event_when_clone_start',
+];
+
 /**
  * Generate executable code for a single game object.
- * Returns a function that can be called to register event handlers.
+ * Only generates code for hat blocks (event blocks) and their children.
+ * Orphan blocks without an event are ignored.
  */
 export function generateCodeForObject(blocklyXml: string, objectId: string): string {
   if (!blocklyXml) return '';
@@ -353,11 +365,27 @@ export function generateCodeForObject(blocklyXml: string, objectId: string): str
       workspace
     );
 
-    // Generate the code
-    const code = javascriptGenerator.workspaceToCode(workspace);
+    // Get only top-level hat blocks (event blocks)
+    const topBlocks = workspace.getTopBlocks(false);
+    const hatBlocks = topBlocks.filter(block => HAT_BLOCKS.includes(block.type));
+
+    // Generate code only for hat blocks
+    let code = '';
+    for (const block of hatBlocks) {
+      const blockCode = javascriptGenerator.blockToCode(block);
+      if (blockCode) {
+        // blockToCode returns [code, order] for value blocks, just code for statement blocks
+        code += typeof blockCode === 'string' ? blockCode : blockCode[0];
+      }
+    }
 
     // Clean up
     workspace.dispose();
+
+    // If no hat blocks, return empty
+    if (!code.trim()) {
+      return '';
+    }
 
     // Wrap in a function that receives runtime context
     // IMPORTANT: No newline before the opening paren, or `return ${code}` will fail due to ASI
