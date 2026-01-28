@@ -1,8 +1,12 @@
 import { useEffect, useRef } from 'react';
 import * as Blockly from 'blockly';
+import { registerContinuousToolbox } from '@blockly/continuous-toolbox';
 import { useProjectStore } from '../../store/projectStore';
 import { useEditorStore } from '../../store/editorStore';
 import { getToolboxConfig } from './toolbox';
+
+// Register continuous toolbox plugin once at module load
+registerContinuousToolbox();
 
 export function BlocklyEditor() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -31,10 +35,15 @@ export function BlocklyEditor() {
       workspaceRef.current.dispose();
     }
 
-    // Standard Blockly config with Zelos renderer
+    // Blockly config with Zelos renderer and continuous toolbox
     workspaceRef.current = Blockly.inject(containerRef.current, {
       toolbox: getToolboxConfig(),
       renderer: 'zelos',
+      plugins: {
+        toolbox: 'ContinuousToolbox',
+        flyoutsVerticalToolbox: 'ContinuousFlyout',
+        metricsManager: 'ContinuousMetrics',
+      },
       trashcan: true,
       zoom: {
         controls: true,
