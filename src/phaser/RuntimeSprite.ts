@@ -1,4 +1,11 @@
 import Phaser from 'phaser';
+import { runtimeDebugLog } from './RuntimeEngine';
+
+function debugLog(type: 'info' | 'event' | 'action' | 'error', message: string) {
+  const entry = { time: Date.now(), type, message };
+  runtimeDebugLog.push(entry);
+  console.log(`[Sprite ${type}] ${message}`);
+}
 
 /**
  * RuntimeSprite wraps a Phaser container/sprite and provides
@@ -60,7 +67,9 @@ export class RuntimeSprite {
 
   changeY(dy: number): void {
     if (this._stopped) return;
+    const oldY = this.container.y;
     this.container.y += dy;
+    debugLog('action', `${this.name}.changeY(${dy}): ${oldY} -> ${this.container.y}`);
   }
 
   getX(): number {

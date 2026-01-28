@@ -1,14 +1,25 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useProjectStore } from '../../store/projectStore';
 import { useEditorStore } from '../../store/editorStore';
 import { generateCodeForObject } from '../../phaser/CodeGenerator';
+import { runtimeDebugLog, clearDebugLog } from '../../phaser/RuntimeEngine';
 
 export function DebugPanel() {
   const [isOpen, setIsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'code' | 'xml' | 'state'>('code');
+  const [activeTab, setActiveTab] = useState<'code' | 'xml' | 'state' | 'runtime'>('code');
+  const [, setLogRefresh] = useState(0);
 
   const { project } = useProjectStore();
-  const { selectedSceneId, selectedObjectId } = useEditorStore();
+  const { selectedSceneId, selectedObjectId, isPlaying } = useEditorStore();
+
+  // Auto-refresh runtime log when playing
+  useEffect(() => {
+    if (!isPlaying || activeTab !== 'runtime') return;
+    const interval = setInterval(() => {
+      setLogRefresh(r => r + 1);
+    }, 500);
+    return () => clearInterval(interval);
+  }, [isPlaying, activeTab]);
 
   const selectedScene = project?.scenes.find(s => s.id === selectedSceneId);
   const selectedObject = selectedScene?.objects.find(o => o.id === selectedObjectId);
@@ -47,6 +58,9 @@ export function DebugPanel() {
           </TabButton>
           <TabButton active={activeTab === 'state'} onClick={() => setActiveTab('state')}>
             State
+          </TabButton>
+          <TabButton active={activeTab === 'runtime'} onClick={() => setActiveTab('runtime')}>
+            Runtime {isPlaying && <span className="ml-1 w-2 h-2 bg-green-500 rounded-full inline-block animate-pulse" />}
           </TabButton>
         </div>
         <button
@@ -100,6 +114,30 @@ export function DebugPanel() {
             </Section>
           </div>
         )}
+        {activeTab === 'runtime' && (
+          <div className="space-y-2">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-yellow-400 font-bold">Runtime Log</span>
+              <button
+                onClick={() => { clearDebugLog(); setLogRefresh(r => r + 1); }}
+                className="px-2 py-1 text-xs bg-gray-700 rounded hover:bg-gray-600"
+              >
+                Clear
+              </button>
+            </div>
+            {runtimeDebugLog.length === 0 ? (
+              <div className="text-gray-500">No logs yet. Press Play to start.</div>
+            ) : (
+              <div className="space-y-1">
+                {runtimeDebugLog.slice(-50).map((entry, i) => (
+                  <div key={i} className={`text-xs ${getLogColor(entry.type)}`}>
+                    <span className="text-gray-500">[{entry.type}]</span> {entry.message}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -125,6 +163,16 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <div className="pl-2 text-gray-300">{children}</div>
     </div>
   );
+}
+
+function getLogColor(type: string): string {
+  switch (type) {
+    case 'info': return 'text-blue-300';
+    case 'event': return 'text-green-300';
+    case 'action': return 'text-yellow-300';
+    case 'error': return 'text-red-400';
+    default: return 'text-gray-300';
+  }
 }
 
 function formatXml(xml: string): string {

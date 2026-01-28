@@ -4,6 +4,31 @@ import { RuntimeSprite } from './RuntimeSprite';
 type EventHandler = () => void | Promise<void>;
 type ForeverHandler = () => void;
 
+// Debug log that can be viewed in the debug panel
+export interface DebugLogEntry {
+  time: number;
+  type: 'info' | 'event' | 'action' | 'error';
+  message: string;
+}
+
+export const runtimeDebugLog: DebugLogEntry[] = [];
+const DEBUG_ENABLED = true;
+const MAX_LOG_ENTRIES = 200;
+
+function debugLog(type: DebugLogEntry['type'], message: string) {
+  if (!DEBUG_ENABLED) return;
+  const entry = { time: Date.now(), type, message };
+  runtimeDebugLog.push(entry);
+  if (runtimeDebugLog.length > MAX_LOG_ENTRIES) {
+    runtimeDebugLog.shift();
+  }
+  console.log(`[Runtime ${type}] ${message}`);
+}
+
+export function clearDebugLog() {
+  runtimeDebugLog.length = 0;
+}
+
 interface ObjectHandlers {
   onStart: EventHandler[];
   onKeyPressed: Map<string, EventHandler[]>;
@@ -33,6 +58,8 @@ export class RuntimeEngine {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+    clearDebugLog();
+    debugLog('info', 'RuntimeEngine created');
     this.setupInputListeners();
   }
 
@@ -40,25 +67,40 @@ export class RuntimeEngine {
     // Create Phaser key objects for reliable key detection
     const keyboard = this.scene.input.keyboard;
     if (!keyboard) {
-      console.warn('Keyboard input not available');
+      debugLog('error', 'Keyboard input not available!');
       return;
     }
 
+    debugLog('info', 'Setting up keyboard input...');
+
     // Register keys we care about
-    this.phaserKeys.set('SPACE', keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE));
-    this.phaserKeys.set('UP', keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP));
-    this.phaserKeys.set('DOWN', keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN));
-    this.phaserKeys.set('LEFT', keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT));
-    this.phaserKeys.set('RIGHT', keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT));
-    this.phaserKeys.set('W', keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W));
-    this.phaserKeys.set('A', keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A));
-    this.phaserKeys.set('S', keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S));
-    this.phaserKeys.set('D', keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D));
+    const keysToRegister = [
+      ['SPACE', Phaser.Input.Keyboard.KeyCodes.SPACE],
+      ['UP', Phaser.Input.Keyboard.KeyCodes.UP],
+      ['DOWN', Phaser.Input.Keyboard.KeyCodes.DOWN],
+      ['LEFT', Phaser.Input.Keyboard.KeyCodes.LEFT],
+      ['RIGHT', Phaser.Input.Keyboard.KeyCodes.RIGHT],
+      ['W', Phaser.Input.Keyboard.KeyCodes.W],
+      ['A', Phaser.Input.Keyboard.KeyCodes.A],
+      ['S', Phaser.Input.Keyboard.KeyCodes.S],
+      ['D', Phaser.Input.Keyboard.KeyCodes.D],
+    ] as const;
+
+    for (const [name, code] of keysToRegister) {
+      this.phaserKeys.set(name, keyboard.addKey(code));
+    }
+    debugLog('info', `Registered ${keysToRegister.length} keys: ${keysToRegister.map(k => k[0]).join(', ')}`);
 
     // Listen for key down events for event_key_pressed blocks
     keyboard.on('keydown', (event: KeyboardEvent) => {
       const key = this.normalizeKey(event.code);
+      debugLog('event', `Key down: ${event.code} -> ${key}`);
       this.triggerKeyPressed(key);
+    });
+
+    keyboard.on('keyup', (event: KeyboardEvent) => {
+      const key = this.normalizeKey(event.code);
+      debugLog('event', `Key up: ${event.code} -> ${key}`);
     });
   }
 
@@ -114,19 +156,28 @@ export class RuntimeEngine {
   // --- Event Registration ---
 
   onGameStart(spriteId: string, handler: EventHandler): void {
+    debugLog('info', `Registering onGameStart for sprite ${spriteId}`);
     const h = this.handlers.get(spriteId);
-    if (h) h.onStart.push(handler);
+    if (h) {
+      h.onStart.push(handler);
+    } else {
+      debugLog('error', `No handlers found for sprite ${spriteId}`);
+    }
   }
 
   onKeyPressed(spriteId: string, key: string, handler: EventHandler): void {
+    debugLog('info', `Registering onKeyPressed(${key}) for sprite ${spriteId}`);
     const h = this.handlers.get(spriteId);
     if (h) {
       if (!h.onKeyPressed.has(key)) h.onKeyPressed.set(key, []);
       h.onKeyPressed.get(key)!.push(handler);
+    } else {
+      debugLog('error', `No handlers found for sprite ${spriteId}`);
     }
   }
 
   onClicked(spriteId: string, handler: EventHandler): void {
+    debugLog('info', `Registering onClicked for sprite ${spriteId}`);
     const h = this.handlers.get(spriteId);
     if (h) h.onClick.push(handler);
 
@@ -136,6 +187,7 @@ export class RuntimeEngine {
       sprite.container.setInteractive();
       sprite.container.on('pointerdown', () => {
         if (this._isRunning) {
+          debugLog('event', `Click triggered on sprite ${spriteId}`);
           handler();
         }
       });
@@ -143,6 +195,7 @@ export class RuntimeEngine {
   }
 
   onTouching(spriteId: string, targetId: string, handler: EventHandler): void {
+    debugLog('info', `Registering onTouching(${targetId}) for sprite ${spriteId}`);
     const h = this.handlers.get(spriteId);
     if (h) {
       if (!h.onTouching.has(targetId)) h.onTouching.set(targetId, []);
@@ -151,6 +204,7 @@ export class RuntimeEngine {
   }
 
   onMessage(spriteId: string, message: string, handler: EventHandler): void {
+    debugLog('info', `Registering onMessage(${message}) for sprite ${spriteId}`);
     const h = this.handlers.get(spriteId);
     if (h) {
       if (!h.onMessage.has(message)) h.onMessage.set(message, []);
@@ -159,11 +213,18 @@ export class RuntimeEngine {
   }
 
   forever(spriteId: string, handler: ForeverHandler): void {
+    debugLog('info', `Registering forever loop for sprite ${spriteId}`);
     const h = this.handlers.get(spriteId);
-    if (h) h.forever.push(handler);
+    if (h) {
+      h.forever.push(handler);
+      debugLog('info', `Forever loop count for ${spriteId}: ${h.forever.length}`);
+    } else {
+      debugLog('error', `No handlers found for sprite ${spriteId}`);
+    }
   }
 
   onCloneStart(spriteId: string, handler: EventHandler): void {
+    debugLog('info', `Registering onCloneStart for sprite ${spriteId}`);
     const h = this.handlers.get(spriteId);
     if (h) h.onCloneStart.push(handler);
   }
@@ -183,7 +244,13 @@ export class RuntimeEngine {
   }
 
   async start(): Promise<void> {
+    debugLog('info', '=== Runtime starting ===');
     this._isRunning = true;
+
+    // Log registered handlers summary
+    for (const [spriteId, h] of this.handlers) {
+      debugLog('info', `Sprite ${spriteId}: onStart=${h.onStart.length}, forever=${h.forever.length}, onKeyPressed=${h.onKeyPressed.size}`);
+    }
 
     // Execute all onStart handlers
     for (const [spriteId, h] of this.handlers) {
@@ -191,8 +258,10 @@ export class RuntimeEngine {
       if (sprite?.isStopped()) continue;
       for (const handler of h.onStart) {
         try {
+          debugLog('event', `Executing onStart handler for ${spriteId}`);
           await handler();
         } catch (e) {
+          debugLog('error', `Error in onStart for ${spriteId}: ${e}`);
           console.error(`Error in onStart for ${spriteId}:`, e);
         }
       }
@@ -202,12 +271,33 @@ export class RuntimeEngine {
     for (const [spriteId, h] of this.handlers) {
       if (h.forever.length > 0) {
         this.activeForeverLoops.set(spriteId, true);
+        debugLog('info', `Activated forever loop for ${spriteId}`);
       }
     }
+    debugLog('info', '=== Runtime started ===');
   }
 
+  private frameCount = 0;
   update(): void {
     if (!this._isRunning) return;
+
+    this.frameCount++;
+
+    // Log every 60 frames (about once per second)
+    if (this.frameCount % 60 === 0) {
+      debugLog('info', `Update frame ${this.frameCount}, active forever loops: ${this.activeForeverLoops.size}`);
+
+      // Log key states
+      const keyStates: string[] = [];
+      for (const [key, phaserKey] of this.phaserKeys) {
+        if (phaserKey.isDown) {
+          keyStates.push(key);
+        }
+      }
+      if (keyStates.length > 0) {
+        debugLog('info', `Keys currently down: ${keyStates.join(', ')}`);
+      }
+    }
 
     // Run forever loops
     for (const [spriteId, h] of this.handlers) {
@@ -219,6 +309,7 @@ export class RuntimeEngine {
         try {
           handler();
         } catch (e) {
+          debugLog('error', `Error in forever loop for ${spriteId}: ${e}`);
           console.error(`Error in forever loop for ${spriteId}:`, e);
         }
       }
@@ -295,11 +386,20 @@ export class RuntimeEngine {
 
   // --- Input Queries ---
 
+  private lastKeyCheckLog = 0;
   isKeyPressed(key: string): boolean {
     const phaserKey = this.phaserKeys.get(key);
     if (phaserKey) {
-      return phaserKey.isDown;
+      const isDown = phaserKey.isDown;
+      // Log only once per second to avoid spam
+      const now = Date.now();
+      if (isDown && now - this.lastKeyCheckLog > 1000) {
+        debugLog('action', `isKeyPressed(${key}) = ${isDown}`);
+        this.lastKeyCheckLog = now;
+      }
+      return isDown;
     }
+    debugLog('error', `isKeyPressed: Unknown key "${key}"`);
     return false;
   }
 
