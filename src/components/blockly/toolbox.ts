@@ -153,7 +153,8 @@ function registerCustomBlocks() {
     init: function() {
       this.appendDummyInput()
         .appendField('🏁 when game starts');
-      this.setNextStatement(true, null);
+      this.appendStatementInput('NEXT')
+        .setCheck(null);
       this.setColour('#FFAB19');
       this.setTooltip('Runs when the game starts');
     }
@@ -175,7 +176,8 @@ function registerCustomBlocks() {
           ['d', 'D'],
         ]), 'KEY')
         .appendField('pressed');
-      this.setNextStatement(true, null);
+      this.appendStatementInput('NEXT')
+        .setCheck(null);
       this.setColour('#FFAB19');
       this.setTooltip('Runs when a key is pressed');
     }
@@ -185,7 +187,8 @@ function registerCustomBlocks() {
     init: function() {
       this.appendDummyInput()
         .appendField('🖱️ when this clicked');
-      this.setNextStatement(true, null);
+      this.appendStatementInput('NEXT')
+        .setCheck(null);
       this.setColour('#FFAB19');
       this.setTooltip('Runs when this object is clicked');
     }
@@ -766,7 +769,8 @@ function registerCustomBlocks() {
       this.appendDummyInput()
         .appendField('when I receive')
         .appendField(new Blockly.FieldTextInput('message1'), 'MESSAGE');
-      this.setNextStatement(true, null);
+      this.appendStatementInput('NEXT')
+        .setCheck(null);
       this.setColour('#FFAB19');
       this.setTooltip('Runs when message is received');
     }
@@ -780,7 +784,8 @@ function registerCustomBlocks() {
           ['edge', 'EDGE'],
           ['(select object)', ''],
         ]), 'TARGET');
-      this.setNextStatement(true, null);
+      this.appendStatementInput('NEXT')
+        .setCheck(null);
       this.setColour('#FFAB19');
       this.setTooltip('Runs when touching target');
     }
@@ -790,7 +795,8 @@ function registerCustomBlocks() {
     init: function() {
       this.appendDummyInput()
         .appendField('when I start as a clone');
-      this.setNextStatement(true, null);
+      this.appendStatementInput('NEXT')
+        .setCheck(null);
       this.setColour('#FFAB19');
       this.setTooltip('Runs when this clone is created');
     }
