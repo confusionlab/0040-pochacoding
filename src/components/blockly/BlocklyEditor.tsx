@@ -1,16 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import * as Blockly from 'blockly';
 import { useProjectStore } from '../../store/projectStore';
 import { useEditorStore } from '../../store/editorStore';
-import { BlockPalette } from './BlockPalette';
-import './toolbox'; // Import to register custom blocks
+import { getToolboxConfig } from './toolbox';
 
 export function BlocklyEditor() {
   const containerRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<Blockly.WorkspaceSvg | null>(null);
-  const [workspace, setWorkspace] = useState<Blockly.WorkspaceSvg | null>(null);
-
-  // Use refs to track current selection for the event listener closure
   const currentSceneIdRef = useRef<string | null>(null);
   const currentObjectIdRef = useRef<string | null>(null);
   const isLoadingRef = useRef(false);
@@ -18,74 +14,50 @@ export function BlocklyEditor() {
   const { project } = useProjectStore();
   const { selectedSceneId, selectedObjectId } = useEditorStore();
 
-  // Keep refs in sync with state (in effect to avoid render-time updates)
+  // Keep refs in sync
   useEffect(() => {
     currentSceneIdRef.current = selectedSceneId;
     currentObjectIdRef.current = selectedObjectId;
   }, [selectedSceneId, selectedObjectId]);
 
-  // Get the currently selected object
   const selectedScene = project?.scenes.find(s => s.id === selectedSceneId);
   const selectedObject = selectedScene?.objects.find(o => o.id === selectedObjectId);
 
-  // Initialize Blockly workspace (without toolbox - we use our custom palette)
+  // Initialize Blockly workspace
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // Clean up existing workspace
     if (workspaceRef.current) {
       workspaceRef.current.dispose();
     }
 
-    // Create new workspace without toolbox
+    // Standard Blockly config with Zelos renderer
     workspaceRef.current = Blockly.inject(containerRef.current, {
-      toolbox: null as unknown as Blockly.utils.toolbox.ToolboxDefinition, // No built-in toolbox
-      grid: {
-        spacing: 20,
-        length: 3,
-        colour: '#ccc',
-        snap: true,
-      },
+      toolbox: getToolboxConfig(),
+      renderer: 'zelos',
+      trashcan: true,
       zoom: {
         controls: true,
         wheel: true,
-        startScale: 0.9,
-        maxScale: 3,
-        minScale: 0.3,
-        scaleSpeed: 1.1,
+        startScale: 1,
       },
-      trashcan: true,
       move: {
         scrollbars: true,
         drag: true,
         wheel: true,
       },
-      theme: Blockly.Theme.defineTheme('phaserBlockly', {
-        name: 'phaserBlockly',
-        base: Blockly.Themes.Classic,
-        fontStyle: {
-          family: 'Nunito, sans-serif',
-          weight: '500',
-          size: 12,
-        },
-        startHats: true,
-      }),
     });
 
-    // Listen for changes - use refs to get current IDs
+    // Save on changes
     workspaceRef.current.addChangeListener((event) => {
-      // Skip save during loading to prevent overwriting with empty workspace
       if (isLoadingRef.current) return;
-
       if (event.type === Blockly.Events.BLOCK_CHANGE ||
           event.type === Blockly.Events.BLOCK_CREATE ||
           event.type === Blockly.Events.BLOCK_DELETE ||
           event.type === Blockly.Events.BLOCK_MOVE) {
         const sceneId = currentSceneIdRef.current;
         const objectId = currentObjectIdRef.current;
-
         if (!workspaceRef.current || !sceneId || !objectId) return;
-
         const xml = Blockly.Xml.workspaceToDom(workspaceRef.current);
         const xmlText = Blockly.Xml.domToText(xml);
         useProjectStore.getState().updateObject(sceneId, objectId, { blocklyXml: xmlText });
@@ -100,26 +72,19 @@ export function BlocklyEditor() {
     });
     resizeObserver.observe(containerRef.current);
 
-    // Set workspace state to trigger BlockPalette re-render
-    setWorkspace(workspaceRef.current);
-
     return () => {
       resizeObserver.disconnect();
       if (workspaceRef.current) {
         workspaceRef.current.dispose();
         workspaceRef.current = null;
       }
-      setWorkspace(null);
     };
   }, []);
 
-  // Load workspace when object selection changes
+  // Load workspace when object changes
   useEffect(() => {
     if (!workspaceRef.current) return;
-
-    // Set loading flag to prevent the change listener from saving during clear/load
     isLoadingRef.current = true;
-
     workspaceRef.current.clear();
 
     if (selectedObject?.blocklyXml) {
@@ -131,7 +96,6 @@ export function BlocklyEditor() {
       }
     }
 
-    // Reset loading flag after a small delay to let Blockly settle
     setTimeout(() => {
       isLoadingRef.current = false;
     }, 50);
@@ -139,38 +103,26 @@ export function BlocklyEditor() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header showing selected object */}
-      <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-600">Code for:</span>
-          {selectedObject ? (
-            <span className="px-2 py-1 bg-[var(--color-primary)] text-white text-sm rounded">
-              {selectedObject.name}
-            </span>
-          ) : (
-            <span className="text-sm text-gray-400 italic">Select an object</span>
-          )}
-        </div>
+      <div className="flex items-center px-4 py-2 bg-gray-50 border-b border-[var(--color-border)]">
+        <span className="text-sm font-medium text-gray-600">Code for:</span>
+        {selectedObject ? (
+          <span className="ml-2 px-2 py-1 bg-[var(--color-primary)] text-white text-sm rounded">
+            {selectedObject.name}
+          </span>
+        ) : (
+          <span className="ml-2 text-sm text-gray-400 italic">Select an object</span>
+        )}
       </div>
 
-      {/* Main content: Block Palette + Workspace */}
-      <div className="flex flex-1 min-h-0">
-        {/* Block Palette on the left */}
-        <div className="w-56 shrink-0 border-r border-[var(--color-border)]">
-          <BlockPalette workspace={workspace} disabled={!selectedObject} />
-        </div>
-
-        {/* Blockly workspace container */}
-        <div ref={containerRef} className="flex-1 relative">
-          {!selectedObject && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-              <div className="bg-white/90 px-6 py-4 rounded-lg shadow-sm text-center">
-                <p className="text-gray-600">Select an object from the stage</p>
-                <p className="text-gray-400 text-sm mt-1">to start coding its behavior</p>
-              </div>
+      <div ref={containerRef} className="flex-1">
+        {!selectedObject && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+            <div className="bg-white/90 px-6 py-4 rounded-lg shadow-sm text-center">
+              <p className="text-gray-600">Select an object from the stage</p>
+              <p className="text-gray-400 text-sm mt-1">to start coding its behavior</p>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

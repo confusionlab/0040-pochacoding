@@ -137,7 +137,11 @@ export function getToolboxConfig(): Blockly.utils.toolbox.ToolboxDefinition {
         kind: 'category',
         name: 'Variables',
         colour: '#FF8C1A',
-        custom: 'VARIABLE',
+        contents: [
+          { kind: 'block', type: 'variables_get' },
+          { kind: 'block', type: 'variables_set' },
+          { kind: 'block', type: 'math_change' },
+        ],
       },
     ],
   };

@@ -62,7 +62,7 @@ export function EditorLayout() {
           <>
             {/* Blockly Editor - Left Panel */}
             <div
-              className="h-full overflow-hidden border-r border-[var(--color-border)]"
+              className="h-full border-r border-[var(--color-border)]"
               style={{ width: `${dividerPosition}%` }}
             >
               <BlocklyEditor />
