@@ -16,7 +16,7 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const runtimeRef = useRef<RuntimeEngine | null>(null);
-  const isInitializedRef = useRef(false);
+  const creationIdRef = useRef(0); // Track which creation attempt is current
 
   const { project, updateObject } = useProjectStore();
   const { selectedSceneId, selectedObjectId, selectObject, selectScene } = useEditorStore();
@@ -45,14 +45,11 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
   useEffect(() => {
     if (!containerRef.current || !project) return;
 
-    // Prevent double initialization in StrictMode
-    const initKey = `${project.id}-${selectedSceneId}-${isPlaying}`;
-    if (isInitializedRef.current && gameRef.current) {
-      console.log('[PhaserCanvas] Skipping re-init, already initialized for:', initKey);
-      return;
-    }
+    // Increment creation ID - any previous async creation attempts will be ignored
+    creationIdRef.current++;
+    const thisCreationId = creationIdRef.current;
 
-    console.log('[PhaserCanvas] Initializing for:', initKey);
+    console.log(`[PhaserCanvas] Starting init #${thisCreationId}, isPlaying=${isPlaying}`);
 
     // Clean up existing game
     if (runtimeRef.current) {
@@ -67,14 +64,18 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
       gameRef.current = null;
     }
 
-    isInitializedRef.current = false;
-
     const { canvasWidth, canvasHeight, backgroundColor } = project.settings;
     const container = containerRef.current;
 
     // Function to create the game
     const createGame = () => {
+      // Check if this creation attempt is still current
+      if (thisCreationId !== creationIdRef.current) {
+        console.log(`[PhaserCanvas] Skipping stale creation #${thisCreationId}, current is #${creationIdRef.current}`);
+        return;
+      }
       if (!container) return;
+      console.log(`[PhaserCanvas] Creating game #${thisCreationId}`);
 
       const config: Phaser.Types.Core.GameConfig = {
         type: Phaser.AUTO,
@@ -124,8 +125,7 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
       };
 
       gameRef.current = new Phaser.Game(config);
-      isInitializedRef.current = true;
-      console.log('[PhaserCanvas] Game created, isInitialized=true');
+      console.log(`[PhaserCanvas] Game #${thisCreationId} created`);
 
       // Force scale refresh after a frame to ensure proper sizing
       requestAnimationFrame(() => {
@@ -149,7 +149,6 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
 
     return () => {
       console.log('[PhaserCanvas] Cleanup triggered');
-      isInitializedRef.current = false;
       if (runtimeRef.current) {
         runtimeRef.current.cleanup();
         setCurrentRuntime(null);
