@@ -16,22 +16,43 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const runtimeRef = useRef<RuntimeEngine | null>(null);
+  const isInitializedRef = useRef(false);
 
   const { project, updateObject } = useProjectStore();
   const { selectedSceneId, selectedObjectId, selectObject, selectScene } = useEditorStore();
 
+  // Use refs for values accessed in Phaser callbacks to avoid stale closures
+  const selectedSceneIdRef = useRef(selectedSceneId);
+  const selectedObjectIdRef = useRef(selectedObjectId);
+  const isPlayingRef = useRef(isPlaying);
+
+  // Keep refs in sync
+  selectedSceneIdRef.current = selectedSceneId;
+  selectedObjectIdRef.current = selectedObjectId;
+  isPlayingRef.current = isPlaying;
+
   const selectedScene = project?.scenes.find(s => s.id === selectedSceneId);
 
-  // Callback to update object position after drag
+  // Callback to update object position after drag - use ref for sceneId
   const handleObjectDragEnd = useCallback((objId: string, x: number, y: number) => {
-    if (selectedSceneId) {
-      updateObject(selectedSceneId, objId, { x, y });
+    const sceneId = selectedSceneIdRef.current;
+    if (sceneId) {
+      updateObject(sceneId, objId, { x, y });
     }
-  }, [selectedSceneId, updateObject]);
+  }, [updateObject]);
 
   // Initialize Phaser
   useEffect(() => {
     if (!containerRef.current || !project) return;
+
+    // Prevent double initialization in StrictMode
+    const initKey = `${project.id}-${selectedSceneId}-${isPlaying}`;
+    if (isInitializedRef.current && gameRef.current) {
+      console.log('[PhaserCanvas] Skipping re-init, already initialized for:', initKey);
+      return;
+    }
+
+    console.log('[PhaserCanvas] Initializing for:', initKey);
 
     // Clean up existing game
     if (runtimeRef.current) {
@@ -45,6 +66,8 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
       gameRef.current.destroy(true);
       gameRef.current = null;
     }
+
+    isInitializedRef.current = false;
 
     const { canvasWidth, canvasHeight, backgroundColor } = project.settings;
     const container = containerRef.current;
@@ -101,6 +124,8 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
       };
 
       gameRef.current = new Phaser.Game(config);
+      isInitializedRef.current = true;
+      console.log('[PhaserCanvas] Game created, isInitialized=true');
 
       // Force scale refresh after a frame to ensure proper sizing
       requestAnimationFrame(() => {
@@ -124,6 +149,7 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
 
     return () => {
       console.log('[PhaserCanvas] Cleanup triggered');
+      isInitializedRef.current = false;
       if (runtimeRef.current) {
         runtimeRef.current.cleanup();
         setCurrentRuntime(null);

@@ -62,7 +62,9 @@ export class RuntimeSprite {
 
   changeX(dx: number): void {
     if (this._stopped) return;
+    const oldX = this.container.x;
     this.container.x += dx;
+    debugLog('action', `${this.name}.changeX(${dx}): ${oldX} -> ${this.container.x}`);
   }
 
   changeY(dy: number): void {
