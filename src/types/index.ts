@@ -25,6 +25,13 @@ export interface Scene {
   background: BackgroundConfig | null;
   objects: GameObject[];
   cameraConfig: CameraConfig;
+  ground?: GroundConfig;
+}
+
+export interface GroundConfig {
+  enabled: boolean;
+  y: number;
+  color: string;
 }
 
 export interface CameraConfig {

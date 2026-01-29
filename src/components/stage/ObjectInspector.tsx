@@ -1,38 +1,205 @@
 import { useState, useEffect } from 'react';
 import { useProjectStore } from '../../store/projectStore';
 import { useEditorStore } from '../../store/editorStore';
-import type { GameObject } from '../../types';
+import type { GameObject, Scene, GroundConfig } from '../../types';
+
+type TabType = 'object' | 'scene';
 
 export function ObjectInspector() {
-  const { project, updateObject } = useProjectStore();
+  const { project, updateObject, updateScene } = useProjectStore();
   const { selectedSceneId, selectedObjectId } = useEditorStore();
+  const [activeTab, setActiveTab] = useState<TabType>('object');
 
   const scene = project?.scenes.find(s => s.id === selectedSceneId);
   const object = scene?.objects.find(o => o.id === selectedObjectId);
 
-  if (!object) {
+  // Switch to object tab when an object is selected
+  useEffect(() => {
+    if (selectedObjectId) {
+      setActiveTab('object');
+    }
+  }, [selectedObjectId]);
+
+  return (
+    <div className="bg-gray-50 border-t border-gray-200">
+      {/* Tabs */}
+      <div className="flex border-b border-gray-200">
+        <button
+          onClick={() => setActiveTab('object')}
+          className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'object'
+              ? 'text-[var(--color-primary)] border-b-2 border-[var(--color-primary)] bg-white'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Object
+        </button>
+        <button
+          onClick={() => setActiveTab('scene')}
+          className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'scene'
+              ? 'text-[var(--color-primary)] border-b-2 border-[var(--color-primary)] bg-white'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Scene
+        </button>
+      </div>
+
+      {/* Tab Content */}
+      <div className="px-4 py-3">
+        {activeTab === 'object' ? (
+          <ObjectProperties
+            object={object}
+            sceneId={selectedSceneId}
+            updateObject={updateObject}
+          />
+        ) : (
+          <SceneProperties
+            scene={scene}
+            updateScene={updateScene}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface ObjectPropertiesProps {
+  object: GameObject | undefined;
+  sceneId: string | null;
+  updateObject: (sceneId: string, objectId: string, updates: Partial<GameObject>) => void;
+}
+
+function ObjectProperties({ object, sceneId, updateObject }: ObjectPropertiesProps) {
+  if (!object || !sceneId) {
     return (
-      <div className="bg-gray-50 border-t border-gray-200 px-4 py-3 text-center text-gray-500 text-sm">
+      <div className="text-center text-gray-500 text-sm py-4">
         Select an object to view its properties
       </div>
     );
   }
 
   return (
-    <div className="bg-gray-50 border-t border-gray-200 px-4 py-3">
+    <>
       <div className="text-sm font-medium text-gray-700 mb-3">
         Properties: {object.name}
       </div>
       <div className="grid grid-cols-2 gap-3 text-sm">
-        <PositionField object={object} sceneId={selectedSceneId!} updateObject={updateObject} />
-        <ScaleField object={object} sceneId={selectedSceneId!} updateObject={updateObject} />
-        <RotationField object={object} sceneId={selectedSceneId!} updateObject={updateObject} />
-        <VisibilityField object={object} sceneId={selectedSceneId!} updateObject={updateObject} />
-        <PhysicsToggle object={object} sceneId={selectedSceneId!} updateObject={updateObject} />
+        <PositionField object={object} sceneId={sceneId} updateObject={updateObject} />
+        <ScaleField object={object} sceneId={sceneId} updateObject={updateObject} />
+        <RotationField object={object} sceneId={sceneId} updateObject={updateObject} />
+        <VisibilityField object={object} sceneId={sceneId} updateObject={updateObject} />
+        <PhysicsToggle object={object} sceneId={sceneId} updateObject={updateObject} />
       </div>
-    </div>
+    </>
   );
 }
+
+interface ScenePropertiesProps {
+  scene: Scene | undefined;
+  updateScene: (sceneId: string, updates: Partial<Scene>) => void;
+}
+
+function SceneProperties({ scene, updateScene }: ScenePropertiesProps) {
+  if (!scene) {
+    return (
+      <div className="text-center text-gray-500 text-sm py-4">
+        No scene selected
+      </div>
+    );
+  }
+
+  const ground = scene.ground || { enabled: false, y: 500, color: '#8B4513' };
+
+  const updateGround = (updates: Partial<GroundConfig>) => {
+    updateScene(scene.id, {
+      ground: { ...ground, ...updates }
+    });
+  };
+
+  return (
+    <>
+      <div className="text-sm font-medium text-gray-700 mb-3">
+        Scene: {scene.name}
+      </div>
+
+      {/* Background Color */}
+      <div className="mb-4">
+        <label className="block text-sm text-gray-600 mb-1">Background Color</label>
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            value={scene.background?.value || '#87CEEB'}
+            onChange={(e) => updateScene(scene.id, {
+              background: { type: 'color', value: e.target.value }
+            })}
+            className="w-10 h-8 rounded border border-gray-300 cursor-pointer"
+          />
+          <input
+            type="text"
+            value={scene.background?.value || '#87CEEB'}
+            onChange={(e) => updateScene(scene.id, {
+              background: { type: 'color', value: e.target.value }
+            })}
+            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+          />
+        </div>
+      </div>
+
+      {/* Ground Settings */}
+      <div className="border-t border-gray-200 pt-3">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-sm font-medium text-gray-700">Ground</span>
+          <button
+            onClick={() => updateGround({ enabled: !ground.enabled })}
+            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+              ground.enabled
+                ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+            }`}
+          >
+            {ground.enabled ? 'Enabled' : 'Disabled'}
+          </button>
+        </div>
+
+        {ground.enabled && (
+          <div className="space-y-3">
+            {/* Ground Y Position */}
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600 w-20">Y Position:</label>
+              <input
+                type="number"
+                value={ground.y}
+                onChange={(e) => updateGround({ y: parseFloat(e.target.value) || 500 })}
+                className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+              />
+            </div>
+
+            {/* Ground Color */}
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600 w-20">Color:</label>
+              <input
+                type="color"
+                value={ground.color}
+                onChange={(e) => updateGround({ color: e.target.value })}
+                className="w-10 h-8 rounded border border-gray-300 cursor-pointer"
+              />
+              <input
+                type="text"
+                value={ground.color}
+                onChange={(e) => updateGround({ color: e.target.value })}
+                className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// Object property field components
 
 interface FieldProps {
   object: GameObject;

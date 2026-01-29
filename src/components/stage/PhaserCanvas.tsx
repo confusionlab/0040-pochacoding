@@ -474,6 +474,15 @@ function createPlayScene(
   runtimeRef.current = runtime;
   setCurrentRuntime(runtime);
 
+  // Configure ground from scene settings
+  if (sceneData.ground) {
+    runtime.configureGround(
+      sceneData.ground.enabled,
+      sceneData.ground.y,
+      sceneData.ground.color
+    );
+  }
+
   // Create objects and register them with runtime
   sceneData.objects.forEach((obj: GameObject) => {
     const container = createObjectVisual(scene, obj);

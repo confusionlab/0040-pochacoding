@@ -223,6 +223,11 @@ export function registerCodeGenerators(): void {
     return `sprite.setGroundY(${y});\n`;
   };
 
+  javascriptGenerator.forBlock['physics_set_ground_color'] = function(block) {
+    const color = block.getFieldValue('COLOR') || '#8B4513';
+    return `runtime.setGroundColor('${color}');\n`;
+  };
+
   // --- Camera ---
 
   javascriptGenerator.forBlock['camera_follow_me'] = function() {

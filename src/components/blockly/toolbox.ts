@@ -178,6 +178,7 @@ export function getToolboxConfig(): Blockly.utils.toolbox.ToolboxDefinition {
               Y: { shadow: { type: 'math_number', fields: { NUM: '500' } } }
             }
           },
+          { kind: 'block', type: 'physics_set_ground_color' },
         ],
       },
       {
@@ -847,6 +848,18 @@ function registerCustomBlocks() {
       this.setNextStatement(true, null);
       this.setColour('#40BF4A');
       this.setTooltip('Set the Y position of the ground');
+    }
+  };
+
+  Blockly.Blocks['physics_set_ground_color'] = {
+    init: function() {
+      this.appendDummyInput()
+        .appendField('set ground color to')
+        .appendField(new Blockly.FieldTextInput('#8B4513'), 'COLOR');
+      this.setPreviousStatement(true, null);
+      this.setNextStatement(true, null);
+      this.setColour('#40BF4A');
+      this.setTooltip('Set the color of the ground (hex color like #8B4513)');
     }
   };
 

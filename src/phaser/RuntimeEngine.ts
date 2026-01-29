@@ -56,6 +56,12 @@ export class RuntimeEngine {
   private cloneCounter: number = 0;
   private messageQueue: string[] = [];
 
+  // Ground configuration
+  private _groundEnabled: boolean = false;
+  private _groundY: number = 500;
+  private _groundColor: string = '#8B4513';
+  private _groundGraphics: Phaser.GameObjects.Graphics | null = null;
+
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
     clearDebugLog();
@@ -669,6 +675,75 @@ export class RuntimeEngine {
 
   get isRunning(): boolean {
     return this._isRunning;
+  }
+
+  // --- Ground ---
+
+  setGroundEnabled(enabled: boolean): void {
+    this._groundEnabled = enabled;
+    this.updateGroundVisual();
+  }
+
+  setGroundY(y: number): void {
+    this._groundY = y;
+    // Update all sprites that have ground enabled
+    for (const sprite of this.sprites.values()) {
+      if (sprite.isGroundEnabled()) {
+        sprite.setGroundY(y);
+      }
+    }
+    this.updateGroundVisual();
+  }
+
+  setGroundColor(color: string): void {
+    this._groundColor = color;
+    this.updateGroundVisual();
+  }
+
+  getGroundY(): number {
+    return this._groundY;
+  }
+
+  getGroundColor(): string {
+    return this._groundColor;
+  }
+
+  isGroundEnabled(): boolean {
+    return this._groundEnabled;
+  }
+
+  /**
+   * Configure ground from scene settings
+   */
+  configureGround(enabled: boolean, y: number, color: string): void {
+    this._groundEnabled = enabled;
+    this._groundY = y;
+    this._groundColor = color;
+    this.updateGroundVisual();
+  }
+
+  private updateGroundVisual(): void {
+    if (!this._groundGraphics) {
+      this._groundGraphics = this.scene.add.graphics();
+      this._groundGraphics.setDepth(-1000); // Behind everything
+    }
+
+    this._groundGraphics.clear();
+
+    if (this._groundEnabled) {
+      // Parse color and draw ground
+      const color = Phaser.Display.Color.HexStringToColor(this._groundColor);
+      const groundHeight = 2000; // Large enough to cover below ground
+      const groundWidth = 10000; // Wide enough for most scenes
+
+      this._groundGraphics.fillStyle(color.color, 1);
+      this._groundGraphics.fillRect(
+        -groundWidth / 2,
+        this._groundY,
+        groundWidth,
+        groundHeight
+      );
+    }
   }
 
   // --- Scene switching ---
