@@ -371,14 +371,20 @@ export class RuntimeSprite {
     let width = 64;
     let height = 64;
 
+    // Use costume image dimensions if available
     if (this._costumeImage) {
-      width = this._costumeImage.width;
-      height = this._costumeImage.height;
+      width = this._costumeImage.displayWidth || this._costumeImage.width;
+      height = this._costumeImage.displayHeight || this._costumeImage.height;
     }
 
-    // Set body size centered on the container origin
-    body.setSize(width, height);
-    body.setOffset(-width / 2, -height / 2);
+    // Ensure minimum size
+    width = Math.max(width, 32);
+    height = Math.max(height, 32);
+
+    // Set body size centered on container
+    // For containers with centered children (origin 0.5, 0.5 at position 0,0),
+    // we need the body centered at (0,0) as well
+    body.setSize(width, height, true); // true = center the body on game object
 
     debugLog('info', `${this.name}: Physics body size set to ${width}x${height}`);
   }
