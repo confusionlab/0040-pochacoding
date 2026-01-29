@@ -635,8 +635,9 @@ function createObjectVisual(
         const sprite = scene.add.image(0, 0, textureKey);
         sprite.setName('sprite');
         container.add(sprite);
-        // Send selection to back so sprite is on top
+        // Send selection to back, bring hit area to front for input
         if (selectionRect) container.sendToBack(selectionRect);
+        if (hitRect) container.bringToTop(hitRect);
         updateContainerSize(sprite.width, sprite.height);
       };
       img.src = currentCostume.assetId;
@@ -645,8 +646,9 @@ function createObjectVisual(
       const sprite = scene.add.image(0, 0, textureKey);
       sprite.setName('sprite');
       container.add(sprite);
-      // Send selection to back so sprite is on top
+      // Send selection to back, bring hit area to front for input
       if (selectionRect) container.sendToBack(selectionRect);
+      if (hitRect) container.bringToTop(hitRect);
       updateContainerSize(sprite.width, sprite.height);
     }
   } else {
@@ -660,8 +662,11 @@ function createObjectVisual(
     graphics.strokeRoundedRect(-32, -32, 64, 64, 8);
 
     container.add(graphics);
-    // Send selection to back
+    // Send selection to back, bring hit area to front for input
     if (selectionRect) container.sendToBack(selectionRect);
+    if (hitRect) container.bringToTop(hitRect);
+    // Ensure hit area is properly configured
+    updateContainerSize(64, 64);
   }
 
   return container;
