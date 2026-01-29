@@ -249,7 +249,8 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
             if (hitRect) {
               hitRect.setSize(width, height);
               hitRect.removeInteractive();
-              hitRect.setInteractive({ useHandCursor: true, draggable: true });
+              hitRect.setInteractive({ useHandCursor: true });
+              phaserScene.input.setDraggable(hitRect);
             }
             // Update selection rectangle size
             const selRect = cont.getByName('selection') as Phaser.GameObjects.Rectangle | null;
@@ -564,7 +565,8 @@ function createObjectVisual(
     // Invisible hit area - this is what actually receives clicks
     hitRect = scene.add.rectangle(0, 0, defaultSize, defaultSize, 0x000000, 0);
     hitRect.setName('hitArea');
-    hitRect.setInteractive({ useHandCursor: true, draggable: true });
+    hitRect.setInteractive({ useHandCursor: true });
+    scene.input.setDraggable(hitRect);
     container.add(hitRect);
 
     // Track drag offset to prevent jumping
@@ -602,7 +604,8 @@ function createObjectVisual(
       hitRect.setSize(w, h);
       // Must refresh interactive to update hit area bounds
       hitRect.removeInteractive();
-      hitRect.setInteractive({ useHandCursor: true, draggable: true });
+      hitRect.setInteractive({ useHandCursor: true });
+      scene.input.setDraggable(hitRect);
     }
 
     // Update selection rectangle size
