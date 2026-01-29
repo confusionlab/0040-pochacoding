@@ -244,15 +244,13 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
             const width = Math.max(sprite.width, 32);
             const height = Math.max(sprite.height, 32);
             cont.setSize(width, height);
-            // Remove old interactive and set up new one with correct hit area
-            if (cont.input) {
-              cont.removeInteractive();
+            // Update hit area rectangle size and refresh interactive
+            const hitRect = cont.getByName('hitArea') as Phaser.GameObjects.Rectangle | null;
+            if (hitRect) {
+              hitRect.setSize(width, height);
+              hitRect.removeInteractive();
+              hitRect.setInteractive({ useHandCursor: true, draggable: true });
             }
-            cont.setInteractive(
-              new Phaser.Geom.Rectangle(-width/2, -height/2, width, height),
-              Phaser.Geom.Rectangle.Contains
-            );
-            phaserScene.input.setDraggable(cont);
             // Update selection rectangle size
             const selRect = cont.getByName('selection') as Phaser.GameObjects.Rectangle | null;
             if (selRect) {
@@ -599,9 +597,12 @@ function createObjectVisual(
     const h = Math.max(height, 32);
     container.setSize(w, h);
 
-    // Update hit area rectangle size
+    // Update hit area rectangle size and refresh interactive bounds
     if (hitRect) {
       hitRect.setSize(w, h);
+      // Must refresh interactive to update hit area bounds
+      hitRect.removeInteractive();
+      hitRect.setInteractive({ useHandCursor: true, draggable: true });
     }
 
     // Update selection rectangle size
