@@ -276,6 +276,10 @@ export function registerCodeGenerators(): void {
     return [`runtime.isTouching(spriteId, '${targetId}')`, Order.FUNCTION_CALL];
   };
 
+  javascriptGenerator.forBlock['sensing_touching_ground'] = function() {
+    return ['sprite.isTouchingGround()', Order.FUNCTION_CALL];
+  };
+
   javascriptGenerator.forBlock['sensing_distance_to'] = function(block) {
     const targetId = block.getFieldValue('TARGET');
     return [`runtime.distanceTo(spriteId, '${targetId}')`, Order.FUNCTION_CALL];

@@ -364,6 +364,15 @@ export class RuntimeSprite {
   /**
    * Update physics body size to match the current costume/visual
    */
+  /**
+   * Check if the sprite is touching the ground (blocked from below)
+   */
+  isTouchingGround(): boolean {
+    const body = this.getBody();
+    if (!body) return false;
+    return body.blocked.down || body.touching.down;
+  }
+
   updatePhysicsBodySize(): void {
     const body = this.getBody();
     if (!body) return;

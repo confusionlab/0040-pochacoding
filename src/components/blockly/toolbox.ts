@@ -219,6 +219,7 @@ export function getToolboxConfig(): Blockly.utils.toolbox.ToolboxDefinition {
           { kind: 'block', type: 'sensing_mouse_x' },
           { kind: 'block', type: 'sensing_mouse_y' },
           { kind: 'block', type: 'sensing_touching' },
+          { kind: 'block', type: 'sensing_touching_ground' },
           { kind: 'block', type: 'sensing_distance_to' },
         ],
       },
@@ -696,6 +697,16 @@ function registerCustomBlocks() {
       this.setOutput(true, 'Boolean');
       this.setColour('#5CB1D6');
       this.setTooltip('Is this touching something?');
+    }
+  };
+
+  Blockly.Blocks['sensing_touching_ground'] = {
+    init: function() {
+      this.appendDummyInput()
+        .appendField('touching ground?');
+      this.setOutput(true, 'Boolean');
+      this.setColour('#5CB1D6');
+      this.setTooltip('Is this sprite touching the ground?');
     }
   };
 
