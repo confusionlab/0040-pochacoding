@@ -181,11 +181,10 @@ export class RuntimeEngine {
     const h = this.handlers.get(spriteId);
     if (h) h.onClick.push(handler);
 
-    // Set up click listener on the sprite's container
+    // Set up click listener with pixel-perfect detection for images
     const sprite = this.sprites.get(spriteId);
     if (sprite) {
-      sprite.container.setInteractive();
-      sprite.container.on('pointerdown', () => {
+      sprite.setupClickHandler(() => {
         if (this._isRunning) {
           debugLog('event', `Click triggered on sprite ${spriteId}`);
           handler();

@@ -29,6 +29,9 @@ export class RuntimeSprite {
   private _currentCostumeIndex: number = 0;
   private _costumeImage: Phaser.GameObjects.Image | null = null;
 
+  // Click handler for pixel-perfect detection
+  private _clickHandler: (() => void) | null = null;
+
   constructor(
     scene: Phaser.Scene,
     container: Phaser.GameObjects.Container,
@@ -205,6 +208,45 @@ export class RuntimeSprite {
     this._costumeImage = this.scene.add.image(0, 0, textureKey);
     this._costumeImage.setOrigin(0.5, 0.5);
     this.container.addAt(this._costumeImage, 0);
+
+    // Re-setup click handler with pixel-perfect detection if one was registered
+    if (this._clickHandler) {
+      this._setupPixelPerfectClick();
+    }
+  }
+
+  /**
+   * Set up click handler - uses pixel-perfect detection for images, bounding box for placeholders
+   */
+  setupClickHandler(handler: () => void): void {
+    this._clickHandler = handler;
+    this._setupPixelPerfectClick();
+  }
+
+  private _setupPixelPerfectClick(): void {
+    if (!this._clickHandler) return;
+
+    // Remove any existing click listeners
+    this.container.removeAllListeners('pointerdown');
+    if (this._costumeImage) {
+      this._costumeImage.removeAllListeners('pointerdown');
+    }
+
+    if (this._costumeImage) {
+      // Use pixel-perfect hit detection on the costume image
+      // alphaTolerance: 1 means only pixels with alpha > 1 (out of 255) register as hits
+      this._costumeImage.setInteractive({
+        pixelPerfect: true,
+        alphaTolerance: 1
+      });
+      this._costumeImage.on('pointerdown', this._clickHandler);
+      debugLog('info', `${this.name}: Pixel-perfect click detection enabled`);
+    } else {
+      // Fall back to container bounding box for placeholder graphics
+      this.container.setInteractive();
+      this.container.on('pointerdown', this._clickHandler);
+      debugLog('info', `${this.name}: Bounding box click detection (no costume)`);
+    }
   }
 
   nextCostume(): void {
