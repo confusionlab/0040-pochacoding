@@ -1,4 +1,72 @@
 import * as Blockly from 'blockly';
+import { useProjectStore } from '@/store/projectStore';
+import { useEditorStore } from '@/store/editorStore';
+
+// Dynamic dropdown generator for object selection (excludes current object)
+function getObjectDropdownOptions(): Array<[string, string]> {
+  const project = useProjectStore.getState().project;
+  const selectedSceneId = useEditorStore.getState().selectedSceneId;
+  const selectedObjectId = useEditorStore.getState().selectedObjectId;
+
+  if (!project || !selectedSceneId) {
+    return [['(no objects)', '']];
+  }
+
+  const scene = project.scenes.find(s => s.id === selectedSceneId);
+  if (!scene || scene.objects.length === 0) {
+    return [['(no objects)', '']];
+  }
+
+  // Return all objects except the currently selected one (can't touch yourself)
+  const options: Array<[string, string]> = scene.objects
+    .filter(obj => obj.id !== selectedObjectId)
+    .map(obj => [obj.name, obj.name]);
+
+  if (options.length === 0) {
+    return [['(no other objects)', '']];
+  }
+
+  return options;
+}
+
+// All objects including current (for camera follow etc.)
+function getAllObjectsDropdownOptions(): Array<[string, string]> {
+  const project = useProjectStore.getState().project;
+  const selectedSceneId = useEditorStore.getState().selectedSceneId;
+
+  if (!project || !selectedSceneId) {
+    return [['(no objects)', '']];
+  }
+
+  const scene = project.scenes.find(s => s.id === selectedSceneId);
+  if (!scene || scene.objects.length === 0) {
+    return [['(no objects)', '']];
+  }
+
+  return scene.objects.map(obj => [obj.name, obj.name]);
+}
+
+// Dropdown with special options + objects
+function getTargetDropdownOptions(includeEdge: boolean = false, includeMouse: boolean = false): () => Array<[string, string]> {
+  return function() {
+    const specialOptions: Array<[string, string]> = [];
+    if (includeEdge) {
+      specialOptions.push(['edge', 'EDGE']);
+    }
+    if (includeMouse) {
+      specialOptions.push(['mouse', 'MOUSE']);
+    }
+
+    const objectOptions = getObjectDropdownOptions();
+
+    // If no real objects, just return special options + placeholder
+    if (objectOptions.length === 1 && objectOptions[0][1] === '') {
+      return [...specialOptions, ...objectOptions];
+    }
+
+    return [...specialOptions, ...objectOptions];
+  };
+}
 
 // Register custom blocks
 registerCustomBlocks();
@@ -704,10 +772,7 @@ function registerCustomBlocks() {
     init: function() {
       this.appendDummyInput()
         .appendField('touching')
-        .appendField(new Blockly.FieldDropdown([
-          ['edge', 'EDGE'],
-          ['(select object)', ''],
-        ]), 'TARGET')
+        .appendField(new Blockly.FieldDropdown(getTargetDropdownOptions(true, false)), 'TARGET')
         .appendField('?');
       this.setOutput(true, 'Boolean');
       this.setColour('#5CB1D6');
@@ -729,10 +794,7 @@ function registerCustomBlocks() {
     init: function() {
       this.appendDummyInput()
         .appendField('distance to')
-        .appendField(new Blockly.FieldDropdown([
-          ['mouse', 'MOUSE'],
-          ['(select object)', ''],
-        ]), 'TARGET');
+        .appendField(new Blockly.FieldDropdown(getTargetDropdownOptions(false, true)), 'TARGET');
       this.setOutput(true, 'Number');
       this.setColour('#5CB1D6');
       this.setTooltip('Distance to target');
@@ -905,9 +967,7 @@ function registerCustomBlocks() {
     init: function() {
       this.appendDummyInput()
         .appendField('camera follow')
-        .appendField(new Blockly.FieldDropdown([
-          ['(select object)', ''],
-        ]), 'TARGET');
+        .appendField(new Blockly.FieldDropdown(getAllObjectsDropdownOptions), 'TARGET');
       this.setPreviousStatement(true, null);
       this.setNextStatement(true, null);
       this.setColour('#0fBDA8');
@@ -1115,10 +1175,7 @@ function registerCustomBlocks() {
     init: function() {
       this.appendDummyInput()
         .appendField('when touching')
-        .appendField(new Blockly.FieldDropdown([
-          ['edge', 'EDGE'],
-          ['(select object)', ''],
-        ]), 'TARGET');
+        .appendField(new Blockly.FieldDropdown(getTargetDropdownOptions(true, false)), 'TARGET');
       this.appendStatementInput('NEXT')
         .setCheck(null);
       this.setColour('#FFAB19');
@@ -1200,10 +1257,7 @@ function registerCustomBlocks() {
     init: function() {
       this.appendDummyInput()
         .appendField('point towards')
-        .appendField(new Blockly.FieldDropdown([
-          ['mouse', 'MOUSE'],
-          ['(select object)', ''],
-        ]), 'TARGET');
+        .appendField(new Blockly.FieldDropdown(getTargetDropdownOptions(false, true)), 'TARGET');
       this.setPreviousStatement(true, null);
       this.setNextStatement(true, null);
       this.setColour('#4C97FF');
