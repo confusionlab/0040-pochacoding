@@ -210,6 +210,19 @@ export function registerCodeGenerators(): void {
     return 'sprite.makeImmovable();\n';
   };
 
+  javascriptGenerator.forBlock['physics_ground_on'] = function() {
+    return 'sprite.setGroundEnabled(true);\n';
+  };
+
+  javascriptGenerator.forBlock['physics_ground_off'] = function() {
+    return 'sprite.setGroundEnabled(false);\n';
+  };
+
+  javascriptGenerator.forBlock['physics_set_ground_y'] = function(block) {
+    const y = javascriptGenerator.valueToCode(block, 'Y', Order.ATOMIC) || '500';
+    return `sprite.setGroundY(${y});\n`;
+  };
+
   // --- Camera ---
 
   javascriptGenerator.forBlock['camera_follow_me'] = function() {

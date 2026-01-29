@@ -329,8 +329,19 @@ export class RuntimeEngine {
     // Check collisions for onTouching handlers
     this.checkCollisions();
 
+    // Check ground collisions for all sprites
+    this.checkGroundCollisions();
+
     // Process message queue
     this.processMessages();
+  }
+
+  private checkGroundCollisions(): void {
+    for (const sprite of this.sprites.values()) {
+      if (!sprite.isStopped()) {
+        sprite.checkGroundCollision();
+      }
+    }
   }
 
   private checkCollisions(): void {

@@ -169,6 +169,15 @@ export function getToolboxConfig(): Blockly.utils.toolbox.ToolboxDefinition {
           },
           { kind: 'block', type: 'physics_collide_bounds' },
           { kind: 'block', type: 'physics_immovable' },
+          { kind: 'block', type: 'physics_ground_on' },
+          { kind: 'block', type: 'physics_ground_off' },
+          {
+            kind: 'block',
+            type: 'physics_set_ground_y',
+            inputs: {
+              Y: { shadow: { type: 'math_number', fields: { NUM: '500' } } }
+            }
+          },
         ],
       },
       {
@@ -803,6 +812,41 @@ function registerCustomBlocks() {
       this.setNextStatement(true, null);
       this.setColour('#40BF4A');
       this.setTooltip('Make this object immovable (like a platform)');
+    }
+  };
+
+  Blockly.Blocks['physics_ground_on'] = {
+    init: function() {
+      this.appendDummyInput()
+        .appendField('turn ground on');
+      this.setPreviousStatement(true, null);
+      this.setNextStatement(true, null);
+      this.setColour('#40BF4A');
+      this.setTooltip('Enable ground collision for this object');
+    }
+  };
+
+  Blockly.Blocks['physics_ground_off'] = {
+    init: function() {
+      this.appendDummyInput()
+        .appendField('turn ground off');
+      this.setPreviousStatement(true, null);
+      this.setNextStatement(true, null);
+      this.setColour('#40BF4A');
+      this.setTooltip('Disable ground collision for this object');
+    }
+  };
+
+  Blockly.Blocks['physics_set_ground_y'] = {
+    init: function() {
+      this.appendValueInput('Y')
+        .setCheck('Number')
+        .appendField('set ground to y:');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true, null);
+      this.setNextStatement(true, null);
+      this.setColour('#40BF4A');
+      this.setTooltip('Set the Y position of the ground');
     }
   };
 

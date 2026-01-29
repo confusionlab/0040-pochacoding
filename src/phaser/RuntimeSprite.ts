@@ -24,6 +24,10 @@ export class RuntimeSprite {
   private _isClone: boolean = false;
   private _cloneParentId: string | null = null;
 
+  // Ground collision
+  private _groundEnabled: boolean = false;
+  private _groundY: number = 500;
+
   // Costume support
   private _costumes: Costume[] = [];
   private _currentCostumeIndex: number = 0;
@@ -353,6 +357,49 @@ export class RuntimeSprite {
     const body = this.getBody();
     if (body) {
       body.setImmovable(true);
+    }
+  }
+
+  // --- Ground Collision ---
+
+  setGroundEnabled(enabled: boolean): void {
+    this._groundEnabled = enabled;
+    debugLog('action', `${this.name}.setGroundEnabled(${enabled})`);
+  }
+
+  setGroundY(y: number): void {
+    this._groundY = y;
+    debugLog('action', `${this.name}.setGroundY(${y})`);
+  }
+
+  isGroundEnabled(): boolean {
+    return this._groundEnabled;
+  }
+
+  getGroundY(): number {
+    return this._groundY;
+  }
+
+  /**
+   * Check and enforce ground collision - called by RuntimeEngine.update()
+   */
+  checkGroundCollision(): void {
+    if (!this._groundEnabled || this._stopped) return;
+
+    // Get sprite bounds to check bottom edge
+    const bounds = this.container.getBounds();
+    const bottomY = bounds.bottom;
+
+    if (bottomY > this._groundY) {
+      // Sprite is below ground - push it up
+      const overlap = bottomY - this._groundY;
+      this.container.y -= overlap;
+
+      // If using physics, also stop downward velocity
+      const body = this.getBody();
+      if (body && body.velocity.y > 0) {
+        body.setVelocityY(0);
+      }
     }
   }
 
