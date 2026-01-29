@@ -565,31 +565,37 @@ function createObjectVisual(
     // Invisible hit area - this is what actually receives clicks
     hitRect = scene.add.rectangle(0, 0, defaultSize, defaultSize, 0x000000, 0);
     hitRect.setName('hitArea');
-    hitRect.setInteractive({ useHandCursor: true });
-    scene.input.setDraggable(hitRect);
     container.add(hitRect);
 
     // Track drag offset to prevent jumping
     let dragOffsetX = 0;
     let dragOffsetY = 0;
 
-    // Forward hit area events to container
-    hitRect.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      container.emit('pointerdown', pointer);
-    });
-    hitRect.on('dragstart', (pointer: Phaser.Input.Pointer) => {
-      // Record offset between pointer and container position
-      dragOffsetX = container.x - pointer.worldX;
-      dragOffsetY = container.y - pointer.worldY;
-    });
-    hitRect.on('drag', (pointer: Phaser.Input.Pointer) => {
-      // Move container maintaining the initial offset
-      const newX = pointer.worldX + dragOffsetX;
-      const newY = pointer.worldY + dragOffsetY;
-      container.emit('drag', pointer, newX, newY);
-    });
-    hitRect.on('dragend', (pointer: Phaser.Input.Pointer) => {
-      container.emit('dragend', pointer);
+    // Set up interactive after adding to container, deferred to next frame
+    // to ensure input system is ready
+    scene.time.delayedCall(0, () => {
+      if (!hitRect || !hitRect.scene) return; // Guard against destroyed objects
+      hitRect.setInteractive({ useHandCursor: true });
+      scene.input.setDraggable(hitRect);
+
+      // Forward hit area events to container
+      hitRect.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+        container.emit('pointerdown', pointer);
+      });
+      hitRect.on('dragstart', (pointer: Phaser.Input.Pointer) => {
+        // Record offset between pointer and container position
+        dragOffsetX = container.x - pointer.worldX;
+        dragOffsetY = container.y - pointer.worldY;
+      });
+      hitRect.on('drag', (pointer: Phaser.Input.Pointer) => {
+        // Move container maintaining the initial offset
+        const newX = pointer.worldX + dragOffsetX;
+        const newY = pointer.worldY + dragOffsetY;
+        container.emit('drag', pointer, newX, newY);
+      });
+      hitRect.on('dragend', (pointer: Phaser.Input.Pointer) => {
+        container.emit('dragend', pointer);
+      });
     });
   }
 
