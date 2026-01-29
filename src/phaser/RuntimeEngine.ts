@@ -61,6 +61,10 @@ export class RuntimeEngine {
   private _groundY: number = 500;
   private _groundColor: string = '#8B4513';
   private _groundGraphics: Phaser.GameObjects.Graphics | null = null;
+  private _groundZone: Phaser.GameObjects.Zone | null = null;
+
+  // Collision tracking to prevent duplicate events per frame
+  private _touchingPairs: Set<string> = new Set();
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -332,40 +336,66 @@ export class RuntimeEngine {
       }
     }
 
-    // Check collisions for onTouching handlers
-    this.checkCollisions();
-
-    // Check ground collisions for all sprites
-    this.checkGroundCollisions();
+    // Clear touching pairs from previous frame
+    this._touchingPairs.clear();
 
     // Process message queue
     this.processMessages();
   }
 
-  private checkGroundCollisions(): void {
-    for (const sprite of this.sprites.values()) {
-      if (!sprite.isStopped()) {
-        sprite.checkGroundCollision();
+  /**
+   * Set up Phaser physics colliders after all sprites are registered
+   */
+  setupPhysicsColliders(): void {
+    const sprites = Array.from(this.sprites.values());
+
+    // Set up overlap detection between all sprite pairs for "when touching" events
+    for (let i = 0; i < sprites.length; i++) {
+      for (let j = i + 1; j < sprites.length; j++) {
+        const spriteA = sprites[i];
+        const spriteB = sprites[j];
+
+        this.scene.physics.add.overlap(
+          spriteA.container,
+          spriteB.container,
+          () => this.handleSpriteOverlap(spriteA.id, spriteB.id)
+        );
       }
     }
+
+    // Set up ground collisions if ground is enabled
+    if (this._groundEnabled && this._groundZone) {
+      for (const sprite of sprites) {
+        this.scene.physics.add.collider(sprite.container, this._groundZone);
+      }
+    }
+
+    debugLog('info', `Physics colliders set up for ${sprites.length} sprites`);
   }
 
-  private checkCollisions(): void {
-    for (const [spriteId, h] of this.handlers) {
-      const sprite = this.sprites.get(spriteId);
-      if (!sprite || sprite.isStopped()) continue;
+  private handleSpriteOverlap(spriteIdA: string, spriteIdB: string): void {
+    // Create a unique key for this pair (order-independent)
+    const pairKey = [spriteIdA, spriteIdB].sort().join('|');
 
-      for (const [targetId, touchHandlers] of h.onTouching) {
-        const target = this.sprites.get(targetId);
-        if (!target || target.isStopped()) continue;
+    // Only fire once per frame per pair
+    if (this._touchingPairs.has(pairKey)) return;
+    this._touchingPairs.add(pairKey);
 
-        // Simple bounds-based collision check
-        const boundsA = sprite.container.getBounds();
-        const boundsB = target.container.getBounds();
+    // Check if A has handlers for touching B
+    const handlersA = this.handlers.get(spriteIdA);
+    if (handlersA) {
+      const touchHandlersA = handlersA.onTouching.get(spriteIdB);
+      if (touchHandlersA) {
+        touchHandlersA.forEach(handler => handler());
+      }
+    }
 
-        if (Phaser.Geom.Intersects.RectangleToRectangle(boundsA, boundsB)) {
-          touchHandlers.forEach(handler => handler());
-        }
+    // Check if B has handlers for touching A
+    const handlersB = this.handlers.get(spriteIdB);
+    if (handlersB) {
+      const touchHandlersB = handlersB.onTouching.get(spriteIdA);
+      if (touchHandlersB) {
+        touchHandlersB.forEach(handler => handler());
       }
     }
   }
@@ -682,17 +712,27 @@ export class RuntimeEngine {
   setGroundEnabled(enabled: boolean): void {
     this._groundEnabled = enabled;
     this.updateGroundVisual();
+    this.updateGroundBody();
+
+    // If enabling, add colliders for all existing sprites
+    if (enabled && this._groundZone) {
+      for (const sprite of this.sprites.values()) {
+        this.scene.physics.add.collider(sprite.container, this._groundZone);
+      }
+    }
   }
 
   setGroundY(y: number): void {
     this._groundY = y;
-    // Update all sprites that have ground enabled
-    for (const sprite of this.sprites.values()) {
-      if (sprite.isGroundEnabled()) {
-        sprite.setGroundY(y);
+    this.updateGroundVisual();
+    this.updateGroundBody();
+
+    // Re-add colliders if ground is enabled
+    if (this._groundEnabled && this._groundZone) {
+      for (const sprite of this.sprites.values()) {
+        this.scene.physics.add.collider(sprite.container, this._groundZone);
       }
     }
-    this.updateGroundVisual();
   }
 
   setGroundColor(color: string): void {
@@ -720,6 +760,7 @@ export class RuntimeEngine {
     this._groundY = y;
     this._groundColor = color;
     this.updateGroundVisual();
+    this.updateGroundBody();
   }
 
   private updateGroundVisual(): void {
@@ -743,6 +784,33 @@ export class RuntimeEngine {
         groundWidth,
         groundHeight
       );
+    }
+  }
+
+  private updateGroundBody(): void {
+    // Remove old ground zone if it exists
+    if (this._groundZone) {
+      this._groundZone.destroy();
+      this._groundZone = null;
+    }
+
+    if (this._groundEnabled) {
+      // Create a zone for ground collision
+      const groundWidth = 10000;
+      const groundHeight = 100;
+      this._groundZone = this.scene.add.zone(0, this._groundY + groundHeight / 2, groundWidth, groundHeight);
+      this.scene.physics.add.existing(this._groundZone, true); // true = static body
+
+      debugLog('info', `Ground body created at y=${this._groundY}`);
+    }
+  }
+
+  /**
+   * Add a sprite to ground collision (called after sprite is registered)
+   */
+  addSpriteToGroundCollision(sprite: RuntimeSprite): void {
+    if (this._groundEnabled && this._groundZone) {
+      this.scene.physics.add.collider(sprite.container, this._groundZone);
     }
   }
 

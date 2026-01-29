@@ -211,16 +211,16 @@ export function registerCodeGenerators(): void {
   };
 
   javascriptGenerator.forBlock['physics_ground_on'] = function() {
-    return 'sprite.setGroundEnabled(true);\n';
+    return 'runtime.setGroundEnabled(true);\n';
   };
 
   javascriptGenerator.forBlock['physics_ground_off'] = function() {
-    return 'sprite.setGroundEnabled(false);\n';
+    return 'runtime.setGroundEnabled(false);\n';
   };
 
   javascriptGenerator.forBlock['physics_set_ground_y'] = function(block) {
     const y = javascriptGenerator.valueToCode(block, 'Y', Order.ATOMIC) || '500';
-    return `sprite.setGroundY(${y});\n`;
+    return `runtime.setGroundY(${y});\n`;
   };
 
   javascriptGenerator.forBlock['physics_set_ground_color'] = function(block) {

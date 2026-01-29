@@ -534,6 +534,9 @@ function createPlayScene(
       runtimeSprite.setCostumes(costumes, obj.currentCostumeIndex || 0);
     }
 
+    // Update physics body size to match costume
+    runtimeSprite.updatePhysicsBodySize();
+
     // Generate and execute code for this object
     console.log(`[CodeExec] Object "${obj.name}" has blocklyXml:`, !!obj.blocklyXml);
     if (obj.blocklyXml) {
@@ -567,6 +570,9 @@ function createPlayScene(
       console.log(`[CodeExec] No blocklyXml for "${obj.name}"`);
     }
   });
+
+  // Set up physics colliders between all sprites
+  runtime.setupPhysicsColliders();
 
   // Start the runtime (execute all onStart handlers)
   runtime.start();

@@ -24,10 +24,6 @@ export class RuntimeSprite {
   private _isClone: boolean = false;
   private _cloneParentId: string | null = null;
 
-  // Ground collision
-  private _groundEnabled: boolean = false;
-  private _groundY: number = 500;
-
   // Costume support
   private _costumes: Costume[] = [];
   private _currentCostumeIndex: number = 0;
@@ -217,6 +213,9 @@ export class RuntimeSprite {
     if (this._clickHandler) {
       this._setupPixelPerfectClick();
     }
+
+    // Update physics body size to match the new costume
+    this.updatePhysicsBodySize();
   }
 
   /**
@@ -360,47 +359,28 @@ export class RuntimeSprite {
     }
   }
 
-  // --- Ground Collision ---
-
-  setGroundEnabled(enabled: boolean): void {
-    this._groundEnabled = enabled;
-    debugLog('action', `${this.name}.setGroundEnabled(${enabled})`);
-  }
-
-  setGroundY(y: number): void {
-    this._groundY = y;
-    debugLog('action', `${this.name}.setGroundY(${y})`);
-  }
-
-  isGroundEnabled(): boolean {
-    return this._groundEnabled;
-  }
-
-  getGroundY(): number {
-    return this._groundY;
-  }
+  // --- Physics Body Size ---
 
   /**
-   * Check and enforce ground collision - called by RuntimeEngine.update()
+   * Update physics body size to match the current costume/visual
    */
-  checkGroundCollision(): void {
-    if (!this._groundEnabled || this._stopped) return;
+  updatePhysicsBodySize(): void {
+    const body = this.getBody();
+    if (!body) return;
 
-    // Get sprite bounds to check bottom edge
-    const bounds = this.container.getBounds();
-    const bottomY = bounds.bottom;
+    let width = 64;
+    let height = 64;
 
-    if (bottomY > this._groundY) {
-      // Sprite is below ground - push it up
-      const overlap = bottomY - this._groundY;
-      this.container.y -= overlap;
-
-      // If using physics, also stop downward velocity
-      const body = this.getBody();
-      if (body && body.velocity.y > 0) {
-        body.setVelocityY(0);
-      }
+    if (this._costumeImage) {
+      width = this._costumeImage.width;
+      height = this._costumeImage.height;
     }
+
+    // Set body size centered on the container origin
+    body.setSize(width, height);
+    body.setOffset(-width / 2, -height / 2);
+
+    debugLog('info', `${this.name}: Physics body size set to ${width}x${height}`);
   }
 
   // --- Control ---
