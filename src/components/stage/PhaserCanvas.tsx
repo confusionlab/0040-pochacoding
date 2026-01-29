@@ -193,11 +193,15 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
 
       if (!container) {
         // Create new object
-        container = createObjectVisual(phaserScene, obj);
-        container.setData('selected', obj.id === selectedObjectId);
+        container = createObjectVisual(phaserScene, obj, true); // true = editor mode
+        const isSelected = obj.id === selectedObjectId;
+        container.setData('selected', isSelected);
 
-        // Make interactive in editor mode
-        container.setInteractive({ draggable: true });
+        // Set initial selection visibility
+        const selectionRect = container.getByName('selection') as Phaser.GameObjects.Rectangle;
+        if (selectionRect) {
+          selectionRect.setVisible(isSelected);
+        }
 
         container.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
           if (pointer.leftButtonDown()) {
@@ -213,21 +217,66 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
         container.on('dragend', () => {
           handleObjectDragEnd(obj.id, container!.x, container!.y);
         });
-
-        // Selection indicator
-        const selectionRect = phaserScene.add.rectangle(0, 0, 72, 72);
-        selectionRect.setStrokeStyle(2, 0x4A90D9);
-        selectionRect.setFillStyle(0x4A90D9, 0.1);
-        selectionRect.setVisible(obj.id === selectedObjectId);
-        selectionRect.setName('selection');
-        container.add(selectionRect);
-        container.sendToBack(selectionRect);
       } else {
         // Update existing object
         container.setPosition(obj.x, obj.y);
         container.setScale(obj.scaleX, obj.scaleY);
         container.setRotation(Phaser.Math.DegToRad(obj.rotation));
         container.setVisible(obj.visible);
+
+        // Update costume if changed
+        const costumes = obj.costumes || [];
+        const currentCostumeIndex = obj.currentCostumeIndex ?? 0;
+        const currentCostume = costumes[currentCostumeIndex];
+        const storedCostumeId = container.getData('costumeId');
+
+        if (currentCostume && currentCostume.id !== storedCostumeId) {
+          // Costume changed - update the sprite
+          const existingSprite = container.getByName('sprite') as Phaser.GameObjects.Image | null;
+          if (existingSprite) {
+            existingSprite.destroy();
+          }
+
+          // Helper to update container with new sprite
+          const updateWithSprite = (sprite: Phaser.GameObjects.Image, cont: Phaser.GameObjects.Container) => {
+            sprite.setName('sprite');
+            cont.add(sprite);
+            const width = Math.max(sprite.width, 32);
+            const height = Math.max(sprite.height, 32);
+            cont.setSize(width, height);
+            // Remove old interactive and set up new one with correct hit area
+            if (cont.input) {
+              cont.removeInteractive();
+            }
+            cont.setInteractive(
+              new Phaser.Geom.Rectangle(-width/2, -height/2, width, height),
+              Phaser.Geom.Rectangle.Contains
+            );
+            phaserScene.input.setDraggable(cont);
+            // Update selection rectangle size
+            const selRect = cont.getByName('selection') as Phaser.GameObjects.Rectangle | null;
+            if (selRect) {
+              selRect.setSize(width + 8, height + 8);
+              cont.sendToBack(selRect);
+            }
+          };
+
+          const textureKey = `costume_${obj.id}_${currentCostume.id}`;
+          if (!phaserScene.textures.exists(textureKey)) {
+            const img = new Image();
+            img.onload = () => {
+              if (phaserScene.textures.exists(textureKey)) return;
+              phaserScene.textures.addImage(textureKey, img);
+              const sprite = phaserScene.add.image(0, 0, textureKey);
+              updateWithSprite(sprite, container!);
+            };
+            img.src = currentCostume.assetId;
+          } else {
+            const sprite = phaserScene.add.image(0, 0, textureKey);
+            updateWithSprite(sprite, container);
+          }
+          container.setData('costumeId', currentCostume.id);
+        }
       }
 
       // Update selection visual
@@ -364,11 +413,15 @@ function createEditorScene(
 
   // Create objects
   sceneData.objects.forEach((obj: GameObject) => {
-    const container = createObjectVisual(scene, obj);
-    container.setData('selected', obj.id === selectedObjectId);
+    const container = createObjectVisual(scene, obj, true); // true = editor mode
+    const isSelected = obj.id === selectedObjectId;
+    container.setData('selected', isSelected);
 
-    // Make interactive in editor mode
-    container.setInteractive({ draggable: true });
+    // Set initial selection visibility
+    const selectionRect = container.getByName('selection') as Phaser.GameObjects.Rectangle;
+    if (selectionRect) {
+      selectionRect.setVisible(isSelected);
+    }
 
     container.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       // Only select on left click
@@ -385,15 +438,6 @@ function createEditorScene(
     container.on('dragend', () => {
       onDragEnd(obj.id, container.x, container.y);
     });
-
-    // Selection indicator
-    const selectionRect = scene.add.rectangle(0, 0, 72, 72);
-    selectionRect.setStrokeStyle(2, 0x4A90D9);
-    selectionRect.setFillStyle(0x4A90D9, 0.1);
-    selectionRect.setVisible(obj.id === selectedObjectId);
-    selectionRect.setName('selection');
-    container.add(selectionRect);
-    container.sendToBack(selectionRect);
   });
 
   // Update selection visuals on scene update
@@ -490,25 +534,134 @@ function createPlayScene(
  */
 function createObjectVisual(
   scene: Phaser.Scene,
-  obj: GameObject
+  obj: GameObject,
+  isEditorMode: boolean = false
 ): Phaser.GameObjects.Container {
-  // Create colored rectangle as placeholder for sprite
-  const graphics = scene.add.graphics();
-  const color = getObjectColor(obj.id);
-
-  graphics.fillStyle(color, 1);
-  graphics.fillRoundedRect(-32, -32, 64, 64, 8);
-  graphics.lineStyle(2, 0x333333);
-  graphics.strokeRoundedRect(-32, -32, 64, 64, 8);
-
   // Create container for the object
-  const container = scene.add.container(obj.x, obj.y, [graphics]);
+  const container = scene.add.container(obj.x, obj.y);
   container.setName(obj.id);
-  container.setSize(64, 64);
   container.setScale(obj.scaleX, obj.scaleY);
   container.setRotation(Phaser.Math.DegToRad(obj.rotation));
   container.setVisible(obj.visible);
   container.setData('objectData', obj);
+
+  // Default size - will be updated when image loads
+  const defaultSize = 64;
+  container.setSize(defaultSize, defaultSize);
+
+  // Create selection rectangle in editor mode (added first, sent to back)
+  let selectionRect: Phaser.GameObjects.Rectangle | null = null;
+  // Create invisible hit area rectangle for reliable click detection
+  let hitRect: Phaser.GameObjects.Rectangle | null = null;
+
+  if (isEditorMode) {
+    // Selection visual
+    selectionRect = scene.add.rectangle(0, 0, defaultSize + 8, defaultSize + 8);
+    selectionRect.setStrokeStyle(2, 0x4A90D9);
+    selectionRect.setFillStyle(0x4A90D9, 0.1);
+    selectionRect.setVisible(false);
+    selectionRect.setName('selection');
+    container.add(selectionRect);
+
+    // Invisible hit area - this is what actually receives clicks
+    hitRect = scene.add.rectangle(0, 0, defaultSize, defaultSize, 0x000000, 0);
+    hitRect.setName('hitArea');
+    hitRect.setInteractive({ useHandCursor: true, draggable: true });
+    container.add(hitRect);
+
+    // Track drag offset to prevent jumping
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+
+    // Forward hit area events to container
+    hitRect.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      container.emit('pointerdown', pointer);
+    });
+    hitRect.on('dragstart', (pointer: Phaser.Input.Pointer) => {
+      // Record offset between pointer and container position
+      dragOffsetX = container.x - pointer.worldX;
+      dragOffsetY = container.y - pointer.worldY;
+    });
+    hitRect.on('drag', (pointer: Phaser.Input.Pointer) => {
+      // Move container maintaining the initial offset
+      const newX = pointer.worldX + dragOffsetX;
+      const newY = pointer.worldY + dragOffsetY;
+      container.emit('drag', pointer, newX, newY);
+    });
+    hitRect.on('dragend', (pointer: Phaser.Input.Pointer) => {
+      container.emit('dragend', pointer);
+    });
+  }
+
+  // Helper to update container size, hit area, and selection rect
+  const updateContainerSize = (width: number, height: number) => {
+    const w = Math.max(width, 32);
+    const h = Math.max(height, 32);
+    container.setSize(w, h);
+
+    // Update hit area rectangle size
+    if (hitRect) {
+      hitRect.setSize(w, h);
+    }
+
+    // Update selection rectangle size
+    if (selectionRect) {
+      selectionRect.setSize(w + 8, h + 8);
+    }
+  };
+
+  // Get current costume
+  const costumes = obj.costumes || [];
+  const currentCostumeIndex = obj.currentCostumeIndex ?? 0;
+  const currentCostume = costumes[currentCostumeIndex];
+
+  if (currentCostume && currentCostume.assetId) {
+    // Store costume ID for change detection
+    container.setData('costumeId', currentCostume.id);
+
+    // Load and display the costume image
+    const textureKey = `costume_${obj.id}_${currentCostume.id}`;
+
+    // Check if texture already exists
+    if (!scene.textures.exists(textureKey)) {
+      // Load texture from data URL
+      const img = new Image();
+      img.onload = () => {
+        if (scene.textures.exists(textureKey)) return; // Avoid double-add
+        scene.textures.addImage(textureKey, img);
+
+        // Create sprite after texture is loaded
+        const sprite = scene.add.image(0, 0, textureKey);
+        sprite.setName('sprite');
+        container.add(sprite);
+        // Send selection to back so sprite is on top
+        if (selectionRect) container.sendToBack(selectionRect);
+        updateContainerSize(sprite.width, sprite.height);
+      };
+      img.src = currentCostume.assetId;
+    } else {
+      // Texture already exists, create sprite immediately
+      const sprite = scene.add.image(0, 0, textureKey);
+      sprite.setName('sprite');
+      container.add(sprite);
+      // Send selection to back so sprite is on top
+      if (selectionRect) container.sendToBack(selectionRect);
+      updateContainerSize(sprite.width, sprite.height);
+    }
+  } else {
+    // No costume - create colored rectangle as placeholder
+    const graphics = scene.add.graphics();
+    const color = getObjectColor(obj.id);
+
+    graphics.fillStyle(color, 1);
+    graphics.fillRoundedRect(-32, -32, 64, 64, 8);
+    graphics.lineStyle(2, 0x333333);
+    graphics.strokeRoundedRect(-32, -32, 64, 64, 8);
+
+    container.add(graphics);
+    // Send selection to back
+    if (selectionRect) container.sendToBack(selectionRect);
+  }
 
   return container;
 }

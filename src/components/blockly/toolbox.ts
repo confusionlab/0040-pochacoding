@@ -26,13 +26,61 @@ export function getToolboxConfig(): Blockly.utils.toolbox.ToolboxDefinition {
         name: 'Motion',
         colour: '#4C97FF',
         contents: [
-          { kind: 'block', type: 'motion_move_steps' },
-          { kind: 'block', type: 'motion_go_to' },
-          { kind: 'block', type: 'motion_change_x' },
-          { kind: 'block', type: 'motion_change_y' },
-          { kind: 'block', type: 'motion_set_x' },
-          { kind: 'block', type: 'motion_set_y' },
-          { kind: 'block', type: 'motion_point_direction' },
+          {
+            kind: 'block',
+            type: 'motion_move_steps',
+            inputs: {
+              STEPS: { shadow: { type: 'math_number', fields: { NUM: '10' } } }
+            }
+          },
+          {
+            kind: 'block',
+            type: 'motion_go_to',
+            inputs: {
+              X: { shadow: { type: 'math_number', fields: { NUM: '0' } } },
+              Y: { shadow: { type: 'math_number', fields: { NUM: '0' } } }
+            }
+          },
+          {
+            kind: 'block',
+            type: 'motion_change_x',
+            inputs: {
+              VALUE: {
+                shadow: {
+                  type: 'math_number',
+                  fields: { NUM: '10' }
+                }
+              }
+            }
+          },
+          {
+            kind: 'block',
+            type: 'motion_change_y',
+            inputs: {
+              VALUE: { shadow: { type: 'math_number', fields: { NUM: '10' } } }
+            }
+          },
+          {
+            kind: 'block',
+            type: 'motion_set_x',
+            inputs: {
+              VALUE: { shadow: { type: 'math_number', fields: { NUM: '0' } } }
+            }
+          },
+          {
+            kind: 'block',
+            type: 'motion_set_y',
+            inputs: {
+              VALUE: { shadow: { type: 'math_number', fields: { NUM: '0' } } }
+            }
+          },
+          {
+            kind: 'block',
+            type: 'motion_point_direction',
+            inputs: {
+              DIRECTION: { shadow: { type: 'math_number', fields: { NUM: '90' } } }
+            }
+          },
           { kind: 'block', type: 'motion_point_towards' },
         ],
       },
@@ -44,11 +92,35 @@ export function getToolboxConfig(): Blockly.utils.toolbox.ToolboxDefinition {
           { kind: 'block', type: 'looks_show' },
           { kind: 'block', type: 'looks_hide' },
           { kind: 'block', type: 'looks_next_costume' },
-          { kind: 'block', type: 'looks_switch_costume' },
+          {
+            kind: 'block',
+            type: 'looks_switch_costume',
+            inputs: {
+              COSTUME: { shadow: { type: 'math_number', fields: { NUM: '1' } } }
+            }
+          },
           { kind: 'block', type: 'looks_costume_number' },
-          { kind: 'block', type: 'looks_set_size' },
-          { kind: 'block', type: 'looks_change_size' },
-          { kind: 'block', type: 'looks_set_opacity' },
+          {
+            kind: 'block',
+            type: 'looks_set_size',
+            inputs: {
+              SIZE: { shadow: { type: 'math_number', fields: { NUM: '100' } } }
+            }
+          },
+          {
+            kind: 'block',
+            type: 'looks_change_size',
+            inputs: {
+              SIZE: { shadow: { type: 'math_number', fields: { NUM: '10' } } }
+            }
+          },
+          {
+            kind: 'block',
+            type: 'looks_set_opacity',
+            inputs: {
+              OPACITY: { shadow: { type: 'math_number', fields: { NUM: '100' } } }
+            }
+          },
           { kind: 'block', type: 'looks_go_to_front' },
           { kind: 'block', type: 'looks_go_to_back' },
         ],
@@ -59,11 +131,42 @@ export function getToolboxConfig(): Blockly.utils.toolbox.ToolboxDefinition {
         colour: '#40BF4A',
         contents: [
           { kind: 'block', type: 'physics_enable' },
-          { kind: 'block', type: 'physics_set_velocity' },
-          { kind: 'block', type: 'physics_set_velocity_x' },
-          { kind: 'block', type: 'physics_set_velocity_y' },
-          { kind: 'block', type: 'physics_set_gravity' },
-          { kind: 'block', type: 'physics_set_bounce' },
+          {
+            kind: 'block',
+            type: 'physics_set_velocity',
+            inputs: {
+              VX: { shadow: { type: 'math_number', fields: { NUM: '0' } } },
+              VY: { shadow: { type: 'math_number', fields: { NUM: '0' } } }
+            }
+          },
+          {
+            kind: 'block',
+            type: 'physics_set_velocity_x',
+            inputs: {
+              VX: { shadow: { type: 'math_number', fields: { NUM: '100' } } }
+            }
+          },
+          {
+            kind: 'block',
+            type: 'physics_set_velocity_y',
+            inputs: {
+              VY: { shadow: { type: 'math_number', fields: { NUM: '100' } } }
+            }
+          },
+          {
+            kind: 'block',
+            type: 'physics_set_gravity',
+            inputs: {
+              GRAVITY: { shadow: { type: 'math_number', fields: { NUM: '300' } } }
+            }
+          },
+          {
+            kind: 'block',
+            type: 'physics_set_bounce',
+            inputs: {
+              BOUNCE: { shadow: { type: 'math_number', fields: { NUM: '0.5' } } }
+            }
+          },
           { kind: 'block', type: 'physics_collide_bounds' },
           { kind: 'block', type: 'physics_immovable' },
         ],
@@ -73,8 +176,20 @@ export function getToolboxConfig(): Blockly.utils.toolbox.ToolboxDefinition {
         name: 'Control',
         colour: '#FFBF00',
         contents: [
-          { kind: 'block', type: 'control_wait' },
-          { kind: 'block', type: 'control_repeat' },
+          {
+            kind: 'block',
+            type: 'control_wait',
+            inputs: {
+              SECONDS: { shadow: { type: 'math_number', fields: { NUM: '1' } } }
+            }
+          },
+          {
+            kind: 'block',
+            type: 'control_repeat',
+            inputs: {
+              TIMES: { shadow: { type: 'math_number', fields: { NUM: '10' } } }
+            }
+          },
           { kind: 'block', type: 'controls_if' },
           { kind: 'block', type: 'control_stop' },
           { kind: 'block', type: 'control_switch_scene' },
@@ -105,10 +220,35 @@ export function getToolboxConfig(): Blockly.utils.toolbox.ToolboxDefinition {
           { kind: 'block', type: 'camera_follow_me' },
           { kind: 'block', type: 'camera_follow_object' },
           { kind: 'block', type: 'camera_stop_follow' },
-          { kind: 'block', type: 'camera_go_to' },
-          { kind: 'block', type: 'camera_shake' },
-          { kind: 'block', type: 'camera_zoom' },
-          { kind: 'block', type: 'camera_fade' },
+          {
+            kind: 'block',
+            type: 'camera_go_to',
+            inputs: {
+              X: { shadow: { type: 'math_number', fields: { NUM: '0' } } },
+              Y: { shadow: { type: 'math_number', fields: { NUM: '0' } } }
+            }
+          },
+          {
+            kind: 'block',
+            type: 'camera_shake',
+            inputs: {
+              DURATION: { shadow: { type: 'math_number', fields: { NUM: '0.5' } } }
+            }
+          },
+          {
+            kind: 'block',
+            type: 'camera_zoom',
+            inputs: {
+              ZOOM: { shadow: { type: 'math_number', fields: { NUM: '100' } } }
+            }
+          },
+          {
+            kind: 'block',
+            type: 'camera_fade',
+            inputs: {
+              DURATION: { shadow: { type: 'math_number', fields: { NUM: '1' } } }
+            }
+          },
         ],
       },
       {
@@ -119,8 +259,20 @@ export function getToolboxConfig(): Blockly.utils.toolbox.ToolboxDefinition {
           { kind: 'block', type: 'sound_play' },
           { kind: 'block', type: 'sound_play_until_done' },
           { kind: 'block', type: 'sound_stop_all' },
-          { kind: 'block', type: 'sound_set_volume' },
-          { kind: 'block', type: 'sound_change_volume' },
+          {
+            kind: 'block',
+            type: 'sound_set_volume',
+            inputs: {
+              VOLUME: { shadow: { type: 'math_number', fields: { NUM: '100' } } }
+            }
+          },
+          {
+            kind: 'block',
+            type: 'sound_change_volume',
+            inputs: {
+              DELTA: { shadow: { type: 'math_number', fields: { NUM: '-10' } } }
+            }
+          },
         ],
       },
       {
@@ -128,10 +280,30 @@ export function getToolboxConfig(): Blockly.utils.toolbox.ToolboxDefinition {
         name: 'Operators',
         colour: '#59C059',
         contents: [
-          { kind: 'block', type: 'math_number' },
-          { kind: 'block', type: 'math_arithmetic' },
-          { kind: 'block', type: 'math_random_int' },
-          { kind: 'block', type: 'logic_compare' },
+          {
+            kind: 'block',
+            type: 'math_arithmetic',
+            inputs: {
+              A: { shadow: { type: 'math_number', fields: { NUM: '1' } } },
+              B: { shadow: { type: 'math_number', fields: { NUM: '1' } } }
+            }
+          },
+          {
+            kind: 'block',
+            type: 'math_random_int',
+            inputs: {
+              FROM: { shadow: { type: 'math_number', fields: { NUM: '1' } } },
+              TO: { shadow: { type: 'math_number', fields: { NUM: '10' } } }
+            }
+          },
+          {
+            kind: 'block',
+            type: 'logic_compare',
+            inputs: {
+              A: { shadow: { type: 'math_number', fields: { NUM: '0' } } },
+              B: { shadow: { type: 'math_number', fields: { NUM: '0' } } }
+            }
+          },
           { kind: 'block', type: 'logic_operation' },
           { kind: 'block', type: 'logic_negate' },
         ],
@@ -142,8 +314,20 @@ export function getToolboxConfig(): Blockly.utils.toolbox.ToolboxDefinition {
         colour: '#FF8C1A',
         contents: [
           { kind: 'block', type: 'variables_get' },
-          { kind: 'block', type: 'variables_set' },
-          { kind: 'block', type: 'math_change' },
+          {
+            kind: 'block',
+            type: 'variables_set',
+            inputs: {
+              VALUE: { shadow: { type: 'math_number', fields: { NUM: '0' } } }
+            }
+          },
+          {
+            kind: 'block',
+            type: 'math_change',
+            inputs: {
+              DELTA: { shadow: { type: 'math_number', fields: { NUM: '1' } } }
+            }
+          },
         ],
       },
     ],
@@ -948,6 +1132,30 @@ function registerCustomBlocks() {
       this.setNextStatement(true, null);
       this.setColour('#9966FF');
       this.setTooltip('Move to back of display');
+    }
+  };
+
+  // Custom math_number block (reporter block with editable number)
+  Blockly.Blocks['math_number'] = {
+    init: function() {
+      this.appendDummyInput()
+        .appendField(new Blockly.FieldNumber(0), 'NUM');
+      this.setOutput(true, 'Number');
+      this.setColour('#59C059');
+      this.setTooltip('A number');
+    }
+  };
+
+  // Text/string block
+  Blockly.Blocks['text'] = {
+    init: function() {
+      this.appendDummyInput()
+        .appendField('"')
+        .appendField(new Blockly.FieldTextInput(''), 'TEXT')
+        .appendField('"');
+      this.setOutput(true, 'String');
+      this.setColour('#59C059');
+      this.setTooltip('A text string');
     }
   };
 }
