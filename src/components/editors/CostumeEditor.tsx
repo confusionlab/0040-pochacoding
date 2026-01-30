@@ -1,14 +1,16 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useProjectStore } from '@/store/projectStore';
 import { useEditorStore } from '@/store/editorStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Loader2 } from 'lucide-react';
+import { processImage } from '@/utils/imageProcessor';
 import type { Costume } from '@/types';
 
 export function CostumeEditor() {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   const { project, updateObject } = useProjectStore();
   const { selectedSceneId, selectedObjectId } = useEditorStore();
 
@@ -35,31 +37,43 @@ export function CostumeEditor() {
     const files = e.target.files;
     if (!files || !selectedSceneId || !selectedObjectId) return;
 
-    for (const file of Array.from(files)) {
-      if (!file.type.startsWith('image/')) continue;
+    setIsProcessing(true);
 
-      // Create a data URL for the image
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = reader.result as string;
-        const newCostume: Costume = {
-          id: crypto.randomUUID(),
-          name: file.name.replace(/\.[^/.]+$/, ''), // Remove extension
-          assetId: dataUrl, // Store data URL directly for now
-        };
+    try {
+      const newCostumes: Costume[] = [];
 
-        const updatedCostumes = [...costumes, newCostume];
+      for (const file of Array.from(files)) {
+        if (!file.type.startsWith('image/')) continue;
+
+        try {
+          // Process image: resize to max 1024x1024 and convert to WebP
+          const processedDataUrl = await processImage(file);
+
+          const newCostume: Costume = {
+            id: crypto.randomUUID(),
+            name: file.name.replace(/\.[^/.]+$/, ''), // Remove extension
+            assetId: processedDataUrl,
+          };
+
+          newCostumes.push(newCostume);
+        } catch (error) {
+          console.error('Failed to process image:', file.name, error);
+        }
+      }
+
+      if (newCostumes.length > 0) {
+        const updatedCostumes = [...costumes, ...newCostumes];
         updateObject(selectedSceneId, selectedObjectId, {
           costumes: updatedCostumes,
           // If this is the first costume, set it as current
           currentCostumeIndex: costumes.length === 0 ? 0 : currentCostumeIndex,
         });
-      };
-      reader.readAsDataURL(file);
+      }
+    } finally {
+      setIsProcessing(false);
+      // Reset input
+      e.target.value = '';
     }
-
-    // Reset input
-    e.target.value = '';
   };
 
   const handleSelectCostume = (index: number) => {
@@ -92,9 +106,13 @@ export function CostumeEditor() {
         <span className="text-sm font-medium">
           Costumes for {object.name}
         </span>
-        <Button onClick={handleAddCostume} size="sm">
-          <Plus className="size-4" />
-          Add Costume
+        <Button onClick={handleAddCostume} size="sm" disabled={isProcessing}>
+          {isProcessing ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Plus className="size-4" />
+          )}
+          {isProcessing ? 'Processing...' : 'Add Costume'}
         </Button>
         <input
           ref={fileInputRef}
