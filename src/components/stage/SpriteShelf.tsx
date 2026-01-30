@@ -1,8 +1,10 @@
 import { useState, useRef } from 'react';
+import { useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import type { Id } from '../../../convex/_generated/dataModel';
 import { useProjectStore } from '@/store/projectStore';
 import { useEditorStore } from '@/store/editorStore';
-import { saveReusable } from '@/db/database';
-import { ReusableLibrary } from '../dialogs/ReusableLibrary';
+import { ObjectLibraryBrowser } from '../dialogs/ObjectLibraryBrowser';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -29,9 +31,10 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Plus, Star, Pencil, Copy, Trash2, ChevronRight, Component, Unlink } from 'lucide-react';
-import type { GameObject, ReusableObject } from '@/types';
+import { Plus, Library, Pencil, Copy, Trash2, ChevronRight, Component, Unlink, Loader2 } from 'lucide-react';
+import type { GameObject, Costume, Sound, PhysicsConfig, ColliderConfig } from '@/types';
 import { getEffectiveObjectProps } from '@/types';
+import { uploadDataUrlToStorage, generateThumbnail } from '@/utils/convexHelpers';
 
 interface SortableObjectItemProps {
   object: GameObject;
@@ -174,8 +177,12 @@ export function SpriteShelf() {
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [showLibrary, setShowLibrary] = useState(false);
+  const [savingToLibrary, setSavingToLibrary] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const sceneInputRef = useRef<HTMLInputElement>(null);
+
+  const generateUploadUrl = useMutation(api.objectLibrary.generateUploadUrl);
+  const createLibraryItem = useMutation(api.objectLibrary.create);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -280,30 +287,79 @@ export function SpriteShelf() {
     setEditName('');
   };
 
-  const handleMakeReusable = async () => {
-    if (!contextMenu) return;
+  const handleSaveToLibrary = async () => {
+    if (!contextMenu || !project) return;
 
     const object = contextMenu.object;
-    const reusable: ReusableObject = {
-      id: crypto.randomUUID(),
-      name: object.name,
-      thumbnail: getObjectColor(object.id),
-      spriteAssetId: object.spriteAssetId,
-      defaultPhysics: object.physics,
-      blocklyXml: object.blocklyXml,
-      createdAt: new Date(),
-      tags: [],
-    };
-
-    try {
-      await saveReusable(reusable);
-      alert(`"${object.name}" saved to library!`);
-    } catch (e) {
-      console.error('Failed to save reusable:', e);
-      alert('Failed to save object to library');
-    }
+    const effectiveProps = getEffectiveObjectProps(object, project.components || []);
 
     handleCloseContextMenu();
+    setSavingToLibrary(true);
+
+    try {
+      // Upload each costume to Convex storage
+      const costumes: Array<{
+        id: string;
+        name: string;
+        storageId: Id<"_storage">;
+        bounds?: { x: number; y: number; width: number; height: number };
+      }> = [];
+
+      for (const costume of effectiveProps.costumes) {
+        const { storageId } = await uploadDataUrlToStorage(
+          costume.assetId,
+          generateUploadUrl
+        );
+        costumes.push({
+          id: costume.id,
+          name: costume.name,
+          storageId: storageId as Id<"_storage">,
+          bounds: costume.bounds,
+        });
+      }
+
+      // Upload each sound to Convex storage
+      const sounds: Array<{
+        id: string;
+        name: string;
+        storageId: Id<"_storage">;
+      }> = [];
+
+      for (const sound of effectiveProps.sounds) {
+        const { storageId } = await uploadDataUrlToStorage(
+          sound.assetId,
+          generateUploadUrl
+        );
+        sounds.push({
+          id: sound.id,
+          name: sound.name,
+          storageId: storageId as Id<"_storage">,
+        });
+      }
+
+      // Generate thumbnail from first costume
+      let thumbnail = '';
+      if (effectiveProps.costumes.length > 0) {
+        thumbnail = await generateThumbnail(effectiveProps.costumes[0].assetId, 128);
+      }
+
+      // Create the library entry
+      await createLibraryItem({
+        name: object.name,
+        thumbnail,
+        costumes,
+        sounds,
+        blocklyXml: effectiveProps.blocklyXml,
+        physics: effectiveProps.physics ?? undefined,
+        collider: effectiveProps.collider ?? undefined,
+      });
+
+    } catch (e) {
+      console.error('Failed to save object to library:', e);
+      alert('Failed to save object to library');
+    } finally {
+      setSavingToLibrary(false);
+    }
   };
 
   const handleMakeComponent = () => {
@@ -321,14 +377,30 @@ export function SpriteShelf() {
     handleCloseContextMenu();
   };
 
-  const getObjectColor = (id: string): string => {
-    let hash = 0;
-    for (let i = 0; i < id.length; i++) {
-      hash = ((hash << 5) - hash) + id.charCodeAt(i);
-      hash = hash & hash;
-    }
-    const hue = Math.abs(hash % 360);
-    return `hsl(${hue}, 60%, 70%)`;
+  const handleLibrarySelect = (data: {
+    name: string;
+    costumes: Costume[];
+    sounds: Sound[];
+    blocklyXml: string;
+    physics: PhysicsConfig | null;
+    collider: ColliderConfig | null;
+  }) => {
+    if (!selectedSceneId) return;
+
+    // Create a new object with all the library data
+    const newObject = addObject(selectedSceneId, data.name);
+
+    // Update with library data (costumes, sounds, etc. are already embedded as data URLs)
+    updateObject(selectedSceneId, newObject.id, {
+      costumes: data.costumes,
+      sounds: data.sounds,
+      blocklyXml: data.blocklyXml,
+      physics: data.physics,
+      collider: data.collider,
+      currentCostumeIndex: 0,
+    });
+
+    selectObject(newObject.id);
   };
 
   return (
@@ -393,8 +465,8 @@ export function SpriteShelf() {
           <Button size="icon-sm" variant="ghost" onClick={handleAddObject} title="Add Object">
             <Plus className="size-4" />
           </Button>
-          <Button size="icon-sm" variant="ghost" onClick={() => setShowLibrary(true)} title="Library">
-            <Star className="size-4" />
+          <Button size="icon-sm" variant="ghost" onClick={() => setShowLibrary(true)} title="Object Library" disabled={savingToLibrary}>
+            {savingToLibrary ? <Loader2 className="size-4 animate-spin" /> : <Library className="size-4" />}
           </Button>
         </div>
       </div>
@@ -489,10 +561,10 @@ export function SpriteShelf() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={handleMakeReusable}
+              onClick={handleSaveToLibrary}
               className="w-full justify-start rounded-none h-8"
             >
-              <Star className="size-4" />
+              <Library className="size-4" />
               Save to Library
             </Button>
             <Button
@@ -508,10 +580,12 @@ export function SpriteShelf() {
         </>
       )}
 
-      {/* Reusable Library Dialog */}
-      {showLibrary && (
-        <ReusableLibrary onClose={() => setShowLibrary(false)} />
-      )}
+      {/* Object Library Dialog */}
+      <ObjectLibraryBrowser
+        open={showLibrary}
+        onOpenChange={setShowLibrary}
+        onSelect={handleLibrarySelect}
+      />
     </div>
   );
 }

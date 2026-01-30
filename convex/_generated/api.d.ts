@@ -13,7 +13,10 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as costumeLibrary from "../costumeLibrary.js";
 import type * as library from "../library.js";
+import type * as objectLibrary from "../objectLibrary.js";
+import type * as soundLibrary from "../soundLibrary.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -24,7 +27,10 @@ import type * as library from "../library.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  costumeLibrary: typeof costumeLibrary;
   library: typeof library;
+  objectLibrary: typeof objectLibrary;
+  soundLibrary: typeof soundLibrary;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

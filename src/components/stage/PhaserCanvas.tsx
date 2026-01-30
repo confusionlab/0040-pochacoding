@@ -38,7 +38,7 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
   const creationIdRef = useRef(0); // Track which creation attempt is current
 
   const { project, updateObject } = useProjectStore();
-  const { selectedSceneId, selectedObjectId, selectObject, selectScene } = useEditorStore();
+  const { selectedSceneId, selectedObjectId, selectObject, selectScene, showColliderOutlines } = useEditorStore();
 
   // Use refs for values accessed in Phaser callbacks to avoid stale closures
   const selectedSceneIdRef = useRef(selectedSceneId);
@@ -121,7 +121,17 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
           default: 'matter',
           matter: {
             gravity: { x: 0, y: 1 }, // Default gravity, scaled per-body
-            debug: !isPlaying,
+            debug: (!isPlaying || showColliderOutlines) ? {
+              showBody: true,
+              showStaticBody: true,
+              renderFill: false,
+              renderLine: true,
+              lineColor: 0x00ff00,
+              lineThickness: 2,
+              staticLineColor: 0x00ff00,
+              fillColor: 0x00ff00,
+              staticFillColor: 0x00ff00,
+            } : false,
           },
         },
         scene: {
@@ -190,6 +200,29 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
       }
     };
   }, [project?.id, selectedSceneId, isPlaying, handleObjectDragEnd]);
+
+  // Toggle collider debug rendering at runtime (without recreating game)
+  useEffect(() => {
+    if (!gameRef.current) return;
+
+    const phaserScene = gameRef.current.scene.getScene('GameScene') as Phaser.Scene;
+    if (!phaserScene?.matter?.world) return;
+
+    const world = phaserScene.matter.world;
+    const shouldShowDebug = !isPlaying || showColliderOutlines;
+
+    if (shouldShowDebug && !world.debugGraphic) {
+      // Enable debug - create debug graphic if it doesn't exist
+      world.createDebugGraphic();
+      world.drawDebug = true;
+    } else if (shouldShowDebug && world.debugGraphic) {
+      world.debugGraphic.setVisible(true);
+      world.drawDebug = true;
+    } else if (!shouldShowDebug && world.debugGraphic) {
+      world.debugGraphic.setVisible(false);
+      world.drawDebug = false;
+    }
+  }, [isPlaying, showColliderOutlines]);
 
   // Update objects when they change (in editor mode only)
   useEffect(() => {
@@ -300,23 +333,27 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
             const imgWidth = sprite.width;
             const imgHeight = sprite.height;
 
-            // If we have bounds, use them for sizing and offset the sprite
+            // Keep sprite at (0, 0) - aligned to 1024x1024 canvas center
+            // This ensures collider alignment regardless of costume bounds
+            sprite.setPosition(0, 0);
+
+            // If we have bounds, offset the hit area and selection to cover visible content
             if (bounds && bounds.width > 0 && bounds.height > 0) {
               const w = Math.max(bounds.width, 32);
               const h = Math.max(bounds.height, 32);
 
-              // Calculate sprite offset to center visible content at container origin
+              // Calculate offset from canvas center (512, 512) to bounds center
               const visibleCenterX = bounds.x + bounds.width / 2;
               const visibleCenterY = bounds.y + bounds.height / 2;
-              const spriteOffsetX = imgWidth / 2 - visibleCenterX;
-              const spriteOffsetY = imgHeight / 2 - visibleCenterY;
+              const offsetX = visibleCenterX - imgWidth / 2;
+              const offsetY = visibleCenterY - imgHeight / 2;
 
-              sprite.setPosition(spriteOffsetX, spriteOffsetY);
               cont.setSize(w, h);
 
               const hitRect = cont.getByName('hitArea') as Phaser.GameObjects.Rectangle | null;
               if (hitRect) {
                 hitRect.setSize(w, h);
+                hitRect.setPosition(offsetX, offsetY);
                 hitRect.removeInteractive();
                 hitRect.setInteractive({ useHandCursor: true });
                 phaserScene.input.setDraggable(hitRect);
@@ -325,6 +362,7 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
               const selRect = cont.getByName('selection') as Phaser.GameObjects.Rectangle | null;
               if (selRect) {
                 selRect.setSize(w + 8, h + 8);
+                selRect.setPosition(offsetX, offsetY);
                 cont.sendToBack(selRect);
               }
             } else {
@@ -332,12 +370,12 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
               const width = Math.max(imgWidth, 32);
               const height = Math.max(imgHeight, 32);
 
-              sprite.setPosition(0, 0);
               cont.setSize(width, height);
 
               const hitRect = cont.getByName('hitArea') as Phaser.GameObjects.Rectangle | null;
               if (hitRect) {
                 hitRect.setSize(width, height);
+                hitRect.setPosition(0, 0);
                 hitRect.removeInteractive();
                 hitRect.setInteractive({ useHandCursor: true });
                 phaserScene.input.setDraggable(hitRect);
@@ -346,6 +384,7 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
               const selRect = cont.getByName('selection') as Phaser.GameObjects.Rectangle | null;
               if (selRect) {
                 selRect.setSize(width + 8, height + 8);
+                selRect.setPosition(0, 0);
                 cont.sendToBack(selRect);
               }
             }
@@ -658,6 +697,12 @@ function createPlayScene(
         defaultHeight = costume.bounds.height;
       }
 
+      // Apply object scale to collider dimensions
+      const scaleX = obj.scaleX ?? 1;
+      const scaleY = obj.scaleY ?? 1;
+      const scaledDefaultWidth = defaultWidth * Math.abs(scaleX);
+      const scaledDefaultHeight = defaultHeight * Math.abs(scaleY);
+
       // Body config options
       const bodyOptions: Phaser.Types.Physics.Matter.MatterBodyConfig = {
         restitution: physics.bounce ?? 0,
@@ -670,30 +715,41 @@ function createPlayScene(
       const posX = container.x;
       const posY = container.y;
 
+      // Apply collider offset (scaled) - both editor and Phaser use Y-down
+      const colliderOffsetX = (collider?.offsetX ?? 0) * scaleX;
+      const colliderOffsetY = (collider?.offsetY ?? 0) * scaleY;
+      const bodyX = posX + colliderOffsetX;
+      const bodyY = posY + colliderOffsetY;
+
       // Determine collider type - default to circle if no collider specified
       const colliderType = collider?.type ?? 'circle';
-      console.log(`[Physics] Creating ${colliderType} collider for "${obj.name}"`);
+      console.log(`[Physics] Creating ${colliderType} collider for "${obj.name}" with scale (${scaleX}, ${scaleY}), offset (${colliderOffsetX}, ${colliderOffsetY})`);
 
       switch (colliderType) {
         case 'none': {
           // No physics body - skip
           console.log(`[Physics] Collider type 'none', skipping physics body`);
-          body = scene.matter.add.rectangle(posX, posY, defaultWidth, defaultHeight, { ...bodyOptions, isSensor: true });
+          body = scene.matter.add.rectangle(bodyX, bodyY, scaledDefaultWidth, scaledDefaultHeight, { ...bodyOptions, isSensor: true });
           break;
         }
         case 'circle': {
-          const radius = collider?.radius || Math.max(defaultWidth, defaultHeight) / 2;
-          console.log(`[Physics] Circle radius: ${radius}`);
-          body = scene.matter.add.circle(posX, posY, radius, bodyOptions);
+          // For circle, use the average scale or max scale to determine radius
+          const avgScale = Math.max(Math.abs(scaleX), Math.abs(scaleY));
+          const baseRadius = collider?.radius || Math.max(defaultWidth, defaultHeight) / 2;
+          const radius = baseRadius * avgScale;
+          console.log(`[Physics] Circle radius: ${radius} (base: ${baseRadius}, scale: ${avgScale})`);
+          body = scene.matter.add.circle(bodyX, bodyY, radius, bodyOptions);
           break;
         }
         case 'capsule': {
           // Matter.js doesn't have native capsule - use chamfered rectangle (pill shape)
-          const width = collider?.width || defaultWidth;
-          const height = collider?.height || defaultHeight;
+          const baseWidth = collider?.width || defaultWidth;
+          const baseHeight = collider?.height || defaultHeight;
+          const width = baseWidth * Math.abs(scaleX);
+          const height = baseHeight * Math.abs(scaleY);
           const chamferRadius = Math.min(width, height) / 2;
           console.log(`[Physics] Capsule: ${width}x${height}, chamfer: ${chamferRadius}`);
-          body = scene.matter.add.rectangle(posX, posY, width, height, {
+          body = scene.matter.add.rectangle(bodyX, bodyY, width, height, {
             ...bodyOptions,
             chamfer: { radius: chamferRadius },
           });
@@ -701,10 +757,12 @@ function createPlayScene(
         }
         case 'box':
         default: {
-          const width = collider?.width || defaultWidth;
-          const height = collider?.height || defaultHeight;
-          console.log(`[Physics] Box: ${width}x${height}`);
-          body = scene.matter.add.rectangle(posX, posY, width, height, bodyOptions);
+          const baseWidth = collider?.width || defaultWidth;
+          const baseHeight = collider?.height || defaultHeight;
+          const width = baseWidth * Math.abs(scaleX);
+          const height = baseHeight * Math.abs(scaleY);
+          console.log(`[Physics] Box: ${width}x${height} (base: ${baseWidth}x${baseHeight}, scale: ${scaleX}x${scaleY})`);
+          body = scene.matter.add.rectangle(bodyX, bodyY, width, height, bodyOptions);
           break;
         }
       }
@@ -716,10 +774,17 @@ function createPlayScene(
       }
       (container as unknown as { body: MatterJS.BodyType }).body = body;
 
+      // Store collider offset for position sync
+      container.setData('colliderOffsetX', colliderOffsetX);
+      container.setData('colliderOffsetY', colliderOffsetY);
+
       // Set up Matter.js to sync container position with body
+      // Subtract the collider offset to get the container position
       scene.matter.world.on('afterupdate', () => {
         if (body && container.active) {
-          container.setPosition(body.position.x, body.position.y);
+          const offsetX = container.getData('colliderOffsetX') ?? 0;
+          const offsetY = container.getData('colliderOffsetY') ?? 0;
+          container.setPosition(body.position.x - offsetX, body.position.y - offsetY);
           if (physics.allowRotation) {
             container.setRotation(body.angle);
           }
@@ -877,26 +942,27 @@ function createObjectVisual(
     const imgWidth = sprite.width;
     const imgHeight = sprite.height;
 
-    // If we have bounds, use them for sizing and offset the sprite
+    // Keep sprite at (0, 0) - aligned to 1024x1024 canvas center
+    // This ensures collider alignment regardless of costume bounds
+    sprite.setPosition(0, 0);
+
+    // If we have bounds, offset the hit area and selection to cover visible content
     if (bounds && bounds.width > 0 && bounds.height > 0) {
       const w = Math.max(bounds.width, 32);
       const h = Math.max(bounds.height, 32);
 
-      // Calculate sprite offset to center visible content at container origin
-      // Sprite origin is at center, so we need to offset by the difference
-      // between the image center and the visible bounds center
+      // Calculate offset from canvas center (512, 512) to bounds center
       const visibleCenterX = bounds.x + bounds.width / 2;
       const visibleCenterY = bounds.y + bounds.height / 2;
-      const spriteOffsetX = imgWidth / 2 - visibleCenterX;
-      const spriteOffsetY = imgHeight / 2 - visibleCenterY;
-
-      sprite.setPosition(spriteOffsetX, spriteOffsetY);
+      const offsetX = visibleCenterX - imgWidth / 2;
+      const offsetY = visibleCenterY - imgHeight / 2;
 
       container.setSize(w, h);
 
-      // Update hit area rectangle
+      // Update hit area rectangle - position it over the visible bounds
       if (hitRect) {
         hitRect.setSize(w, h);
+        hitRect.setPosition(offsetX, offsetY);
         hitRect.removeInteractive();
         hitRect.setInteractive({ useHandCursor: true });
         scene.input.setDraggable(hitRect);
@@ -905,17 +971,18 @@ function createObjectVisual(
       // Update selection rectangle
       if (selectionRect) {
         selectionRect.setSize(w + 8, h + 8);
+        selectionRect.setPosition(offsetX, offsetY);
       }
     } else {
       // No bounds - use full image size (fallback)
       const w = Math.max(imgWidth, 32);
       const h = Math.max(imgHeight, 32);
 
-      sprite.setPosition(0, 0);
       container.setSize(w, h);
 
       if (hitRect) {
         hitRect.setSize(w, h);
+        hitRect.setPosition(0, 0);
         hitRect.removeInteractive();
         hitRect.setInteractive({ useHandCursor: true });
         scene.input.setDraggable(hitRect);
@@ -923,6 +990,7 @@ function createObjectVisual(
 
       if (selectionRect) {
         selectionRect.setSize(w + 8, h + 8);
+        selectionRect.setPosition(0, 0);
       }
     }
   };

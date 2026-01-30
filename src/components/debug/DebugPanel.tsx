@@ -4,6 +4,7 @@ import { useEditorStore } from '@/store/editorStore';
 import { generateCodeForObject } from '@/phaser/CodeGenerator';
 import { runtimeDebugLog, clearDebugLog } from '@/phaser/RuntimeEngine';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 
 export function DebugPanel() {
   const [isOpen, setIsOpen] = useState(false);
@@ -11,7 +12,7 @@ export function DebugPanel() {
   const [, setLogRefresh] = useState(0);
 
   const { project } = useProjectStore();
-  const { selectedSceneId, selectedObjectId, isPlaying } = useEditorStore();
+  const { selectedSceneId, selectedObjectId, isPlaying, showColliderOutlines, setShowColliderOutlines } = useEditorStore();
 
   // Auto-refresh runtime log when playing
   useEffect(() => {
@@ -75,12 +76,22 @@ export function DebugPanel() {
       </div>
 
       {/* Object selector info */}
-      <div className="px-4 py-2 bg-gray-800/50 text-xs text-gray-400 border-b border-gray-700">
-        {selectedObject ? (
-          <span>Object: <span className="text-green-400">{selectedObject.name}</span> ({selectedObject.id.slice(0, 8)}...)</span>
-        ) : (
-          <span className="text-yellow-400">No object selected</span>
-        )}
+      <div className="px-4 py-2 bg-gray-800/50 text-xs text-gray-400 border-b border-gray-700 flex items-center justify-between">
+        <div>
+          {selectedObject ? (
+            <span>Object: <span className="text-green-400">{selectedObject.name}</span> ({selectedObject.id.slice(0, 8)}...)</span>
+          ) : (
+            <span className="text-yellow-400">No object selected</span>
+          )}
+        </div>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <Checkbox
+            checked={showColliderOutlines}
+            onCheckedChange={(checked) => setShowColliderOutlines(checked === true)}
+            className="border-green-400 data-[state=checked]:bg-green-500 data-[state=checked]:border-green-500"
+          />
+          <span className="text-green-400">Colliders</span>
+        </label>
       </div>
 
       {/* Content */}

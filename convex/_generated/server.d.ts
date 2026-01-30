@@ -77,8 +77,8 @@ export declare const action: ActionBuilder<DataModel, "public">;
 /**
  * Define an action that is only accessible from other Convex functions (but not from the client).
  *
- * @param func - The action. It receives an {@link ActionCtx} as its first argument.
- * @returns The wrapped action. Include this as an `export` to name it and make it accessible.
+ * @param func - The function. It receives an {@link ActionCtx} as its first argument.
+ * @returns The wrapped function. Include this as an `export` to name it and make it accessible.
  */
 export declare const internalAction: ActionBuilder<DataModel, "internal">;
 

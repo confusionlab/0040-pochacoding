@@ -1,19 +1,29 @@
 import { useRef, useState } from 'react';
+import { useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import type { Id } from '../../../convex/_generated/dataModel';
 import { useProjectStore } from '@/store/projectStore';
 import { useEditorStore } from '@/store/editorStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Plus, Play, Square, Trash2 } from 'lucide-react';
+import { Plus, Play, Square, Trash2, Library, Save, Loader2 } from 'lucide-react';
+import { SoundLibraryBrowser } from '@/components/dialogs/SoundLibraryBrowser';
+import { uploadDataUrlToStorage } from '@/utils/convexHelpers';
 import type { Sound } from '@/types';
 
 export function SoundEditor() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [savingToLibrary, setSavingToLibrary] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const { project, updateObject } = useProjectStore();
   const { selectedSceneId, selectedObjectId } = useEditorStore();
+
+  const generateUploadUrl = useMutation(api.soundLibrary.generateUploadUrl);
+  const createLibraryItem = useMutation(api.soundLibrary.create);
 
   const scene = project?.scenes.find(s => s.id === selectedSceneId);
   const object = scene?.objects.find(o => o.id === selectedObjectId);
@@ -101,6 +111,49 @@ export function SoundEditor() {
     updateObject(selectedSceneId, selectedObjectId, { sounds: updatedSounds });
   };
 
+  const handleLibrarySelect = (data: { name: string; dataUrl: string }) => {
+    if (!selectedSceneId || !selectedObjectId) return;
+
+    const newSound: Sound = {
+      id: crypto.randomUUID(),
+      name: data.name,
+      assetId: data.dataUrl,
+    };
+
+    const updatedSounds = [...sounds, newSound];
+    updateObject(selectedSceneId, selectedObjectId, { sounds: updatedSounds });
+  };
+
+  const handleSaveToLibrary = async (index: number) => {
+    const sound = sounds[index];
+    if (!sound) return;
+
+    setSavingToLibrary(index);
+    try {
+      // Get duration from audio
+      const duration = await getAudioDurationFromDataUrl(sound.assetId);
+
+      // Upload to Convex storage
+      const { storageId, size, mimeType } = await uploadDataUrlToStorage(
+        sound.assetId,
+        generateUploadUrl
+      );
+
+      // Create the library entry
+      await createLibraryItem({
+        name: sound.name,
+        storageId: storageId as Id<"_storage">,
+        mimeType,
+        size,
+        duration,
+      });
+    } catch (error) {
+      console.error('Failed to save sound to library:', error);
+    } finally {
+      setSavingToLibrary(null);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -108,10 +161,16 @@ export function SoundEditor() {
         <span className="text-sm font-medium">
           Sounds for {object.name}
         </span>
-        <Button onClick={handleAddSound} size="sm">
-          <Plus className="size-4" />
-          Add Sound
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={handleAddSound} size="sm" variant="outline">
+            <Plus className="size-4" />
+            Import
+          </Button>
+          <Button onClick={() => setShowLibrary(true)} size="sm">
+            <Library className="size-4" />
+            Library
+          </Button>
+        </div>
         <input
           ref={fileInputRef}
           type="file"
@@ -158,6 +217,22 @@ export function SoundEditor() {
                   className="flex-1 h-8"
                 />
 
+                {/* Save to library button */}
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => handleSaveToLibrary(index)}
+                  disabled={savingToLibrary === index}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-primary"
+                  title="Save to library"
+                >
+                  {savingToLibrary === index ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Save className="size-4" />
+                  )}
+                </Button>
+
                 {/* Delete button */}
                 <Button
                   variant="ghost"
@@ -172,6 +247,26 @@ export function SoundEditor() {
           </div>
         )}
       </div>
+
+      {/* Sound Library Browser Dialog */}
+      <SoundLibraryBrowser
+        open={showLibrary}
+        onOpenChange={setShowLibrary}
+        onSelect={handleLibrarySelect}
+      />
     </div>
   );
+}
+
+async function getAudioDurationFromDataUrl(dataUrl: string): Promise<number | undefined> {
+  return new Promise((resolve) => {
+    const audio = document.createElement("audio");
+    audio.onloadedmetadata = () => {
+      resolve(audio.duration);
+    };
+    audio.onerror = () => {
+      resolve(undefined);
+    };
+    audio.src = dataUrl;
+  });
 }

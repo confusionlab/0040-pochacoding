@@ -19,6 +19,9 @@ interface EditorStore {
   // Play state
   isPlaying: boolean;
 
+  // Debug state
+  showColliderOutlines: boolean;
+
   // View state
   zoom: number;
   panX: number;
@@ -57,6 +60,9 @@ interface EditorStore {
   openObjectPicker: (callback: ObjectPickerCallback, excludeId?: string | null) => void;
   closeObjectPicker: () => void;
 
+  // Debug actions
+  setShowColliderOutlines: (show: boolean) => void;
+
   // Undo/Redo registration
   registerCostumeUndo: (handler: UndoRedoHandler | null) => void;
   registerCodeUndo: (handler: UndoRedoHandler | null) => void;
@@ -73,6 +79,9 @@ export const useEditorStore = create<EditorStore>((set) => ({
 
   // Play state
   isPlaying: false,
+
+  // Debug state
+  showColliderOutlines: false,
 
   // View state
   zoom: 1,
@@ -148,6 +157,10 @@ export const useEditorStore = create<EditorStore>((set) => ({
       objectPickerCallback: null,
       objectPickerExcludeId: null,
     });
+  },
+
+  setShowColliderOutlines: (show) => {
+    set({ showColliderOutlines: show });
   },
 
   registerCostumeUndo: (handler) => {

@@ -1,10 +1,15 @@
 import { useRef, useState, memo } from 'react';
+import { useMutation } from 'convex/react';
+import { api } from '../../../../convex/_generated/api';
+import type { Id } from '../../../../convex/_generated/dataModel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Plus, X, Upload, Loader2 } from 'lucide-react';
+import { Plus, X, Upload, Loader2, Library, Save } from 'lucide-react';
 import { processImage } from '@/utils/imageProcessor';
 import { calculateVisibleBounds } from '@/utils/imageBounds';
+import { uploadDataUrlToStorage, generateThumbnail } from '@/utils/convexHelpers';
+import { CostumeLibraryBrowser } from '@/components/dialogs/CostumeLibraryBrowser';
 import type { Costume } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -27,6 +32,11 @@ export const CostumeList = memo(({
 }: CostumeListProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [savingToLibrary, setSavingToLibrary] = useState<number | null>(null);
+
+  const generateUploadUrl = useMutation(api.costumeLibrary.generateUploadUrl);
+  const createLibraryItem = useMutation(api.costumeLibrary.create);
 
   const handleAddBlank = () => {
     // Create a blank 1024x1024 transparent canvas as initial costume
@@ -78,6 +88,47 @@ export const CostumeList = memo(({
     }
   };
 
+  const handleLibrarySelect = (data: { name: string; dataUrl: string; bounds?: { x: number; y: number; width: number; height: number } }) => {
+    const newCostume: Costume = {
+      id: crypto.randomUUID(),
+      name: data.name,
+      assetId: data.dataUrl,
+      bounds: data.bounds,
+    };
+    onAddCostume(newCostume);
+  };
+
+  const handleSaveToLibrary = async (index: number) => {
+    const costume = costumes[index];
+    if (!costume) return;
+
+    setSavingToLibrary(index);
+    try {
+      // Generate thumbnail
+      const thumbnail = await generateThumbnail(costume.assetId, 128);
+
+      // Upload to Convex storage
+      const { storageId, size, mimeType } = await uploadDataUrlToStorage(
+        costume.assetId,
+        generateUploadUrl
+      );
+
+      // Create the library entry
+      await createLibraryItem({
+        name: costume.name,
+        storageId: storageId as Id<"_storage">,
+        thumbnail,
+        bounds: costume.bounds,
+        mimeType,
+        size,
+      });
+    } catch (error) {
+      console.error('Failed to save costume to library:', error);
+    } finally {
+      setSavingToLibrary(null);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full w-48 border-r bg-muted/30">
       {/* Header */}
@@ -99,7 +150,7 @@ export const CostumeList = memo(({
             size="icon"
             className="size-6"
             onClick={handleUploadClick}
-            title="Upload image"
+            title="Import image"
             disabled={isProcessing}
           >
             {isProcessing ? (
@@ -107,6 +158,16 @@ export const CostumeList = memo(({
             ) : (
               <Upload className="size-3" />
             )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6"
+            onClick={() => setShowLibrary(true)}
+            title="Browse library"
+            disabled={isProcessing}
+          >
+            <Library className="size-3" />
           </Button>
         </div>
         <input
@@ -209,6 +270,23 @@ export const CostumeList = memo(({
                 </button>
               )}
 
+              {/* Save to library button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSaveToLibrary(index);
+                }}
+                disabled={savingToLibrary === index}
+                className="absolute bottom-6 right-0 w-4 h-4 bg-primary text-primary-foreground rounded-l opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center disabled:opacity-50"
+                title="Save to library"
+              >
+                {savingToLibrary === index ? (
+                  <Loader2 className="size-2.5 animate-spin" />
+                ) : (
+                  <Save className="size-2.5" />
+                )}
+              </button>
+
               {/* Index badge */}
               <div className="absolute top-0 left-0 w-4 h-4 bg-foreground text-background rounded-tl rounded-br flex items-center justify-center text-[9px] font-medium">
                 {index + 1}
@@ -217,6 +295,13 @@ export const CostumeList = memo(({
           ))
         )}
       </div>
+
+      {/* Costume Library Browser Dialog */}
+      <CostumeLibraryBrowser
+        open={showLibrary}
+        onOpenChange={setShowLibrary}
+        onSelect={handleLibrarySelect}
+      />
     </div>
   );
 });

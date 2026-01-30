@@ -209,6 +209,12 @@ export class RuntimeSprite {
       this._costumeImage = null;
     }
 
+    // Remove any existing sprite image created by PhaserCanvas
+    const existingSprite = this.container.getByName('sprite');
+    if (existingSprite) {
+      existingSprite.destroy();
+    }
+
     // Remove the default graphics (colored rectangle)
     const graphics = this.container.getAt(0);
     if (graphics instanceof Phaser.GameObjects.Graphics) {
@@ -242,21 +248,9 @@ export class RuntimeSprite {
     this._costumeImage = this.scene.add.image(0, 0, textureKey);
     this._costumeImage.setOrigin(0.5, 0.5);
 
-    // Get current costume bounds and offset the image to center visible content
-    const costume = this._costumes[this._currentCostumeIndex];
-    if (costume?.bounds && costume.bounds.width > 0 && costume.bounds.height > 0) {
-      const imgWidth = this._costumeImage.width;
-      const imgHeight = this._costumeImage.height;
-      const bounds = costume.bounds;
-
-      // Calculate offset to center visible content at container origin
-      const visibleCenterX = bounds.x + bounds.width / 2;
-      const visibleCenterY = bounds.y + bounds.height / 2;
-      const spriteOffsetX = imgWidth / 2 - visibleCenterX;
-      const spriteOffsetY = imgHeight / 2 - visibleCenterY;
-
-      this._costumeImage.setPosition(spriteOffsetX, spriteOffsetY);
-    }
+    // Keep sprite at (0, 0) - centered on the 1024x1024 canvas
+    // This ensures the collider aligns with the visual regardless of costume bounds
+    // The bounds are only used for editor selection/hit area, not positioning
 
     this.container.addAt(this._costumeImage, 0);
 
