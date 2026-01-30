@@ -4,35 +4,90 @@ import { useEditorStore } from '@/store/editorStore';
 
 // Special value for "pick from stage" option
 const PICK_FROM_STAGE = '__PICK_FROM_STAGE__';
+// Prefix for "any component instance" option
+const COMPONENT_ANY_PREFIX = 'COMPONENT_ANY:';
 
 // Store reference to the field being picked for (so callback can update it)
 let pendingPickerField: Blockly.FieldDropdown | null = null;
 
-// Helper to generate unique display names for objects
-function getUniqueDisplayNames(objects: Array<{ id: string; name: string }>, excludeId?: string): Array<[string, string]> {
-  // Count name occurrences
-  const nameCounts = new Map<string, number>();
-  const nameIndices = new Map<string, number>();
+// Helper to generate dropdown options with component grouping
+function generateObjectDropdownOptions(
+  excludeId?: string,
+  includePicker: boolean = true
+): Array<[string, string]> {
+  const project = useProjectStore.getState().project;
+  const selectedSceneId = useEditorStore.getState().selectedSceneId;
 
-  for (const obj of objects) {
-    if (obj.id === excludeId) continue;
-    nameCounts.set(obj.name, (nameCounts.get(obj.name) || 0) + 1);
+  if (!project || !selectedSceneId) {
+    return [['(no objects)', '']];
   }
 
-  // Generate unique display names
+  const scene = project.scenes.find(s => s.id === selectedSceneId);
+  if (!scene || scene.objects.length === 0) {
+    return [['(no objects)', '']];
+  }
+
+  const components = project.components || [];
   const result: Array<[string, string]> = [];
-  for (const obj of objects) {
+
+  // Group objects by componentId
+  const regularObjects: Array<{ id: string; name: string }> = [];
+  const componentGroups = new Map<string, Array<{ id: string; name: string }>>();
+
+  for (const obj of scene.objects) {
     if (obj.id === excludeId) continue;
 
-    const count = nameCounts.get(obj.name) || 0;
+    if (obj.componentId) {
+      const group = componentGroups.get(obj.componentId) || [];
+      group.push({ id: obj.id, name: obj.name });
+      componentGroups.set(obj.componentId, group);
+    } else {
+      regularObjects.push({ id: obj.id, name: obj.name });
+    }
+  }
+
+  // Add regular objects with unique naming for duplicates
+  const regularNameCounts = new Map<string, number>();
+  const regularNameIndices = new Map<string, number>();
+
+  for (const obj of regularObjects) {
+    regularNameCounts.set(obj.name, (regularNameCounts.get(obj.name) || 0) + 1);
+  }
+
+  for (const obj of regularObjects) {
+    const count = regularNameCounts.get(obj.name) || 0;
     if (count > 1) {
-      // Multiple objects with same name - add index
-      const index = (nameIndices.get(obj.name) || 0) + 1;
-      nameIndices.set(obj.name, index);
+      const index = (regularNameIndices.get(obj.name) || 0) + 1;
+      regularNameIndices.set(obj.name, index);
       result.push([`${obj.name} (${index})`, obj.id]);
     } else {
       result.push([obj.name, obj.id]);
     }
+  }
+
+  // Add component instance groups
+  for (const [componentId, instances] of componentGroups) {
+    const component = components.find(c => c.id === componentId);
+    const componentName = component?.name || 'Component';
+
+    // Add individual instances numbered
+    instances.forEach((inst, index) => {
+      result.push([`${componentName} (${index + 1})`, inst.id]);
+    });
+
+    // Add "(any)" option for this component if there's more than one instance
+    if (instances.length > 1) {
+      result.push([`${componentName} (any)`, `${COMPONENT_ANY_PREFIX}${componentId}`]);
+    }
+  }
+
+  if (result.length === 0) {
+    return [['(no other objects)', '']];
+  }
+
+  // Add "pick from stage" option at the end
+  if (includePicker) {
+    result.push(['🎯 pick from stage...', PICK_FROM_STAGE]);
   }
 
   return result;
@@ -40,57 +95,13 @@ function getUniqueDisplayNames(objects: Array<{ id: string; name: string }>, exc
 
 // Dynamic dropdown generator for object selection (excludes current object)
 function getObjectDropdownOptions(includePicker: boolean = true): Array<[string, string]> {
-  const project = useProjectStore.getState().project;
-  const selectedSceneId = useEditorStore.getState().selectedSceneId;
   const selectedObjectId = useEditorStore.getState().selectedObjectId;
-
-  if (!project || !selectedSceneId) {
-    return [['(no objects)', '']];
-  }
-
-  const scene = project.scenes.find(s => s.id === selectedSceneId);
-  if (!scene || scene.objects.length === 0) {
-    return [['(no objects)', '']];
-  }
-
-  // Return all objects except the currently selected one with unique display names
-  const options = getUniqueDisplayNames(scene.objects, selectedObjectId);
-
-  if (options.length === 0) {
-    return [['(no other objects)', '']];
-  }
-
-  // Add "pick from stage" option at the end
-  if (includePicker && options.length > 0) {
-    options.push(['🎯 pick from stage...', PICK_FROM_STAGE]);
-  }
-
-  return options;
+  return generateObjectDropdownOptions(selectedObjectId || undefined, includePicker);
 }
 
 // All objects including current (for camera follow etc.)
 function getAllObjectsDropdownOptions(includePicker: boolean = true): Array<[string, string]> {
-  const project = useProjectStore.getState().project;
-  const selectedSceneId = useEditorStore.getState().selectedSceneId;
-
-  if (!project || !selectedSceneId) {
-    return [['(no objects)', '']];
-  }
-
-  const scene = project.scenes.find(s => s.id === selectedSceneId);
-  if (!scene || scene.objects.length === 0) {
-    return [['(no objects)', '']];
-  }
-
-  // Generate unique display names for all objects
-  const options = getUniqueDisplayNames(scene.objects);
-
-  // Add "pick from stage" option at the end
-  if (includePicker && options.length > 0) {
-    options.push(['🎯 pick from stage...', PICK_FROM_STAGE]);
-  }
-
-  return options;
+  return generateObjectDropdownOptions(undefined, includePicker);
 }
 
 // Dropdown with special options + objects

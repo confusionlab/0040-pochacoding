@@ -578,8 +578,8 @@ function createPlayScene(
     // Enable physics for collision detection (needed for all sprites to detect collisions)
     scene.physics.add.existing(container);
 
-    // Register with runtime
-    const runtimeSprite = runtime.registerSprite(obj.id, obj.name, container);
+    // Register with runtime (include componentId for component instances)
+    const runtimeSprite = runtime.registerSprite(obj.id, obj.name, container, obj.componentId);
 
     // Set costumes if available (use effective costumes for component instances)
     const costumes = effectiveProps.costumes || [];

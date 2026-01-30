@@ -18,6 +18,7 @@ export class RuntimeSprite {
   public scene: Phaser.Scene;
   public id: string;
   public name: string;
+  public componentId: string | null = null; // For component instances
   private runtime: RuntimeEngine | null = null;
 
   private _direction: number = 90; // 0 = up, 90 = right, 180 = down, 270 = left

@@ -215,6 +215,38 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     set(state => {
       if (!state.project) return state;
 
+      // Find the object to check if it's a component instance
+      const scene = state.project.scenes.find(s => s.id === sceneId);
+      const obj = scene?.objects.find(o => o.id === objectId);
+
+      // If updating name of a component instance, update the component and all instances
+      if (updates.name && obj?.componentId) {
+        const componentId = obj.componentId;
+        return {
+          project: {
+            ...state.project,
+            // Update component definition name
+            components: (state.project.components || []).map(c =>
+              c.id === componentId ? { ...c, name: updates.name! } : c
+            ),
+            // Update all instances of this component across all scenes
+            scenes: state.project.scenes.map(s => ({
+              ...s,
+              objects: s.objects.map(o =>
+                o.componentId === componentId
+                  ? { ...o, name: updates.name! }
+                  : o.id === objectId
+                    ? { ...o, ...updates }
+                    : o
+              ),
+            })),
+            updatedAt: new Date(),
+          },
+          isDirty: true,
+        };
+      }
+
+      // Regular object update
       return {
         project: {
           ...state.project,

@@ -160,10 +160,12 @@ export class RuntimeEngine {
   registerSprite(
     id: string,
     name: string,
-    container: Phaser.GameObjects.Container
+    container: Phaser.GameObjects.Container,
+    componentId?: string | null
   ): RuntimeSprite {
     const sprite = new RuntimeSprite(this.scene, container, id, name);
     sprite.setRuntime(this);
+    sprite.componentId = componentId || null;
     this.sprites.set(id, sprite);
     this.handlers.set(id, {
       onStart: [],
@@ -424,21 +426,40 @@ export class RuntimeEngine {
     if (this._touchingPairs.has(pairKey)) return;
     this._touchingPairs.add(pairKey);
 
-    // Check if A has handlers for touching B
+    const spriteA = this.sprites.get(spriteIdA);
+    const spriteB = this.sprites.get(spriteIdB);
+
+    // Check if A has handlers for touching B (direct or component-any)
     const handlersA = this.handlers.get(spriteIdA);
     if (handlersA) {
+      // Direct handler for B
       const touchHandlersA = handlersA.onTouching.get(spriteIdB);
       if (touchHandlersA) {
         touchHandlersA.forEach(handler => handler());
       }
+      // Component-any handler for B's component
+      if (spriteB?.componentId) {
+        const componentAnyHandlers = handlersA.onTouching.get(`COMPONENT_ANY:${spriteB.componentId}`);
+        if (componentAnyHandlers) {
+          componentAnyHandlers.forEach(handler => handler());
+        }
+      }
     }
 
-    // Check if B has handlers for touching A
+    // Check if B has handlers for touching A (direct or component-any)
     const handlersB = this.handlers.get(spriteIdB);
     if (handlersB) {
+      // Direct handler for A
       const touchHandlersB = handlersB.onTouching.get(spriteIdA);
       if (touchHandlersB) {
         touchHandlersB.forEach(handler => handler());
+      }
+      // Component-any handler for A's component
+      if (spriteA?.componentId) {
+        const componentAnyHandlers = handlersB.onTouching.get(`COMPONENT_ANY:${spriteA.componentId}`);
+        if (componentAnyHandlers) {
+          componentAnyHandlers.forEach(handler => handler());
+        }
       }
     }
   }
@@ -654,9 +675,27 @@ export class RuntimeEngine {
              bounds.top <= 0 || bounds.bottom >= this._canvasHeight;
     }
 
+    // Handle COMPONENT_ANY: prefix - check if touching any instance of a component
+    if (targetId.startsWith('COMPONENT_ANY:')) {
+      const componentId = targetId.substring('COMPONENT_ANY:'.length);
+      for (const target of this.sprites.values()) {
+        if (target.id === spriteId) continue; // Don't check self
+        if (target.componentId === componentId) {
+          if (this.isTouchingSingle(sprite, target)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
     const target = this.sprites.get(targetId);
     if (!target) return false;
 
+    return this.isTouchingSingle(sprite, target);
+  }
+
+  private isTouchingSingle(sprite: RuntimeSprite, target: RuntimeSprite): boolean {
     // Use physics body overlap if both have physics bodies
     const bodyA = sprite.container.body as Phaser.Physics.Arcade.Body | null;
     const bodyB = target.container.body as Phaser.Physics.Arcade.Body | null;
