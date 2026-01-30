@@ -1,11 +1,14 @@
-import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useState } from 'react';
 import { floodFill, hexToRgb } from '@/utils/floodFill';
 import { calculateBoundsFromCanvas } from '@/utils/imageBounds';
 import type { DrawingTool } from './CostumeToolbar';
 import type { CostumeBounds, ColliderConfig } from '@/types';
 
 const CANVAS_SIZE = 1024;
-const DISPLAY_SIZE = 480;
+const BASE_DISPLAY_SIZE = 480;
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 4;
+const ZOOM_STEP = 0.1;
 const HANDLE_SIZE = 16;
 const ROTATION_HANDLE_OFFSET = 40;
 
@@ -37,12 +40,17 @@ export const CostumeCanvas = forwardRef<CostumeCanvasHandle, CostumeCanvasProps>
   onHistoryChange,
   onColliderChange,
 }, ref) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const colliderCanvasRef = useRef<HTMLCanvasElement>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const overlayCtxRef = useRef<CanvasRenderingContext2D | null>(null);
   const colliderCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+
+  // Zoom state
+  const [zoom, setZoom] = useState(1);
+  const displaySize = BASE_DISPLAY_SIZE * zoom;
 
   // Drawing state
   const isDrawingRef = useRef(false);
@@ -1002,6 +1010,13 @@ export const CostumeCanvas = forwardRef<CostumeCanvasHandle, CostumeCanvasProps>
     colliderCanvas.style.cursor = cursor;
   }, [activeTool]);
 
+  // Handle wheel zoom
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+    setZoom(prev => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, prev + delta)));
+  }, []);
+
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
     toDataURL: () => {
@@ -1186,56 +1201,90 @@ export const CostumeCanvas = forwardRef<CostumeCanvasHandle, CostumeCanvasProps>
   };
 
   return (
-    <div className="flex-1 overflow-hidden bg-muted/50 flex items-center justify-center p-4">
+    <div className="flex-1 overflow-hidden bg-muted/50 flex flex-col">
+      {/* Zoom controls */}
+      <div className="flex items-center justify-center gap-2 py-2 border-b bg-background/50">
+        <button
+          onClick={() => setZoom(prev => Math.max(MIN_ZOOM, prev - ZOOM_STEP))}
+          className="px-2 py-1 text-xs bg-muted hover:bg-muted/80 rounded"
+          disabled={zoom <= MIN_ZOOM}
+        >
+          -
+        </button>
+        <span className="text-xs text-muted-foreground w-16 text-center">
+          {Math.round(zoom * 100)}%
+        </span>
+        <button
+          onClick={() => setZoom(prev => Math.min(MAX_ZOOM, prev + ZOOM_STEP))}
+          className="px-2 py-1 text-xs bg-muted hover:bg-muted/80 rounded"
+          disabled={zoom >= MAX_ZOOM}
+        >
+          +
+        </button>
+        <button
+          onClick={() => setZoom(1)}
+          className="px-2 py-1 text-xs bg-muted hover:bg-muted/80 rounded ml-2"
+        >
+          Reset
+        </button>
+      </div>
+
+      {/* Scrollable canvas container */}
       <div
-        className="border shadow-sm relative overflow-hidden"
-        style={{
-          width: DISPLAY_SIZE,
-          height: DISPLAY_SIZE,
-          ...checkerboardStyle,
-        }}
+        ref={containerRef}
+        className="flex-1 overflow-auto flex items-center justify-center p-4"
+        onWheel={handleWheel}
       >
-        {/* Main canvas */}
-        <canvas
-          ref={canvasRef}
-          width={CANVAS_SIZE}
-          height={CANVAS_SIZE}
+        <div
+          className="border shadow-sm relative overflow-hidden flex-shrink-0"
           style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: DISPLAY_SIZE,
-            height: DISPLAY_SIZE,
+            width: displaySize,
+            height: displaySize,
+            ...checkerboardStyle,
           }}
-        />
-        {/* Overlay canvas for selection/preview */}
-        <canvas
-          ref={overlayCanvasRef}
-          width={CANVAS_SIZE}
-          height={CANVAS_SIZE}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: DISPLAY_SIZE,
-            height: DISPLAY_SIZE,
-            pointerEvents: activeTool === 'collider' ? 'none' : 'auto',
-          }}
-        />
-        {/* Collider overlay canvas */}
-        <canvas
-          ref={colliderCanvasRef}
-          width={CANVAS_SIZE}
-          height={CANVAS_SIZE}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: DISPLAY_SIZE,
-            height: DISPLAY_SIZE,
-            pointerEvents: activeTool === 'collider' ? 'auto' : 'none',
-          }}
-        />
+        >
+          {/* Main canvas */}
+          <canvas
+            ref={canvasRef}
+            width={CANVAS_SIZE}
+            height={CANVAS_SIZE}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: displaySize,
+              height: displaySize,
+            }}
+          />
+          {/* Overlay canvas for selection/preview */}
+          <canvas
+            ref={overlayCanvasRef}
+            width={CANVAS_SIZE}
+            height={CANVAS_SIZE}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: displaySize,
+              height: displaySize,
+              pointerEvents: activeTool === 'collider' ? 'none' : 'auto',
+            }}
+          />
+          {/* Collider overlay canvas */}
+          <canvas
+            ref={colliderCanvasRef}
+            width={CANVAS_SIZE}
+            height={CANVAS_SIZE}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: displaySize,
+              height: displaySize,
+              pointerEvents: activeTool === 'collider' ? 'auto' : 'none',
+            }}
+          />
+        </div>
       </div>
     </div>
   );

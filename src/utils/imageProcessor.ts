@@ -1,10 +1,11 @@
 /**
  * Image processing utility for costumes
- * - Resizes images to fit within 1024x1024 (maintaining aspect ratio)
+ * - Resizes images to fit within 950x950 (maintaining aspect ratio)
  * - Converts to WebP format with good compression
+ * Note: Canvas is 1024x1024, but we limit imports to 950px to leave room for editing
  */
 
-const MAX_SIZE = 1024;
+const MAX_SIZE = 950;
 const WEBP_QUALITY = 0.85; // 85% quality - good balance of size and quality
 
 /**
