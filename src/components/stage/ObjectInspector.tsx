@@ -46,8 +46,10 @@ function ColorSwatch({ value, onChange }: ColorSwatchProps) {
     };
   }, [isOpen]);
 
-  const handleColorChange = useCallback((rgba: [number, number, number, number]) => {
-    const hex = Color.rgb(rgba[0], rgba[1], rgba[2]).hex();
+  const handleColorChange = useCallback((rgba: unknown) => {
+    // ColorPicker passes [r, g, b, a] tuple
+    const rgbaArray = rgba as [number, number, number, number];
+    const hex = Color.rgb(rgbaArray[0], rgbaArray[1], rgbaArray[2]).hex();
     onChange(hex);
   }, [onChange]);
 
@@ -209,7 +211,7 @@ function ScrubInput({ label, value, onChange, step = 1, precision = 2, min, max,
 }
 
 export function ObjectInspector() {
-  const { project, updateObject, updateScene, updateComponent } = useProjectStore();
+  const { project, updateObject, updateScene } = useProjectStore();
   const { selectedSceneId, selectedObjectId } = useEditorStore();
   const [activeTab, setActiveTab] = useState<string>('object');
 
@@ -512,7 +514,7 @@ function PhysicsToggle({ object, sceneId, updateObject }: FieldProps) {
         physics: {
           enabled: true,
           bodyType: 'dynamic',
-          gravityY: 300,
+          gravityY: 1, // Matter.js gravity scale: 1 = normal gravity
           velocityX: 0,
           velocityY: 0,
           bounce: 0.2,

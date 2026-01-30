@@ -118,9 +118,9 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
           autoCenter: Phaser.Scale.NO_CENTER,
         },
         physics: {
-          default: 'arcade',
-          arcade: {
-            gravity: { x: 0, y: 0 },
+          default: 'matter',
+          matter: {
+            gravity: { x: 0, y: 1 }, // Default gravity, scaled per-body
             debug: !isPlaying,
           },
         },
@@ -636,9 +636,6 @@ function createPlayScene(
     const container = createObjectVisual(scene, obj, false, canvasWidth, canvasHeight, components);
     container.setDepth(objectCount - index); // Top of list = highest depth = renders on top
 
-    // Enable physics for collision detection (needed for all sprites to detect collisions)
-    scene.physics.add.existing(container);
-
     // Register with runtime (include componentId for component instances)
     const runtimeSprite = runtime.registerSprite(obj.id, obj.name, container, obj.componentId);
 
@@ -648,34 +645,109 @@ function createPlayScene(
       runtimeSprite.setCostumes(costumes, effectiveProps.currentCostumeIndex || 0);
     }
 
-    // Update physics body size to match costume
-    runtimeSprite.updatePhysicsBodySize();
-
     // Apply physics configuration (use effective physics for component instances)
     const physics = effectiveProps.physics;
-    const body = container.body as Phaser.Physics.Arcade.Body;
-    if (body) {
-      if (physics?.enabled) {
-        // Apply physics settings
-        body.setGravityY(physics.gravityY ?? 0);
-        body.setBounce(physics.bounce ?? 0, physics.bounce ?? 0);
-        body.setVelocity(physics.velocityX ?? 0, physics.velocityY ?? 0);
-        body.setCollideWorldBounds(true); // Keep objects in bounds
-
-        // Store allowRotation flag for runtime updates
-        container.setData('allowRotation', physics.allowRotation ?? false);
-
-        // Set body type (static bodies don't move)
-        if (physics.bodyType === 'static') {
-          body.setImmovable(true);
-          body.setGravityY(0);
-        }
-      } else {
-        // No physics enabled - disable gravity and make it not respond to physics
-        body.setGravityY(0);
-        body.setImmovable(true);
-        body.setAllowGravity(false);
+    const collider = effectiveProps.collider;
+    console.log(`[Physics] Object "${obj.name}" collider:`, collider);
+    if (physics?.enabled) {
+      // Get default size from costume bounds
+      const costume = costumes[effectiveProps.currentCostumeIndex || 0];
+      let defaultWidth = 64, defaultHeight = 64;
+      if (costume?.bounds && costume.bounds.width > 0 && costume.bounds.height > 0) {
+        defaultWidth = costume.bounds.width;
+        defaultHeight = costume.bounds.height;
       }
+
+      // Body config options
+      const bodyOptions: Phaser.Types.Physics.Matter.MatterBodyConfig = {
+        restitution: physics.bounce ?? 0,
+        frictionAir: 0.01,
+        friction: 0.1,
+      };
+
+      // Create Matter body based on collider config
+      let body: MatterJS.BodyType;
+      const posX = container.x;
+      const posY = container.y;
+
+      // Determine collider type - default to circle if no collider specified
+      const colliderType = collider?.type ?? 'circle';
+      console.log(`[Physics] Creating ${colliderType} collider for "${obj.name}"`);
+
+      switch (colliderType) {
+        case 'none': {
+          // No physics body - skip
+          console.log(`[Physics] Collider type 'none', skipping physics body`);
+          body = scene.matter.add.rectangle(posX, posY, defaultWidth, defaultHeight, { ...bodyOptions, isSensor: true });
+          break;
+        }
+        case 'circle': {
+          const radius = collider?.radius || Math.max(defaultWidth, defaultHeight) / 2;
+          console.log(`[Physics] Circle radius: ${radius}`);
+          body = scene.matter.add.circle(posX, posY, radius, bodyOptions);
+          break;
+        }
+        case 'capsule': {
+          // Matter.js doesn't have native capsule - use chamfered rectangle (pill shape)
+          const width = collider?.width || defaultWidth;
+          const height = collider?.height || defaultHeight;
+          const chamferRadius = Math.min(width, height) / 2;
+          console.log(`[Physics] Capsule: ${width}x${height}, chamfer: ${chamferRadius}`);
+          body = scene.matter.add.rectangle(posX, posY, width, height, {
+            ...bodyOptions,
+            chamfer: { radius: chamferRadius },
+          });
+          break;
+        }
+        case 'box':
+        default: {
+          const width = collider?.width || defaultWidth;
+          const height = collider?.height || defaultHeight;
+          console.log(`[Physics] Box: ${width}x${height}`);
+          body = scene.matter.add.rectangle(posX, posY, width, height, bodyOptions);
+          break;
+        }
+      }
+
+      // Attach body to container
+      const existingBody = (container as unknown as { body?: MatterJS.BodyType }).body;
+      if (existingBody) {
+        scene.matter.world.remove(existingBody);
+      }
+      (container as unknown as { body: MatterJS.BodyType }).body = body;
+
+      // Set up Matter.js to sync container position with body
+      scene.matter.world.on('afterupdate', () => {
+        if (body && container.active) {
+          container.setPosition(body.position.x, body.position.y);
+          if (physics.allowRotation) {
+            container.setRotation(body.angle);
+          }
+        }
+      });
+
+      // Store allowRotation flag for runtime updates
+      container.setData('allowRotation', physics.allowRotation ?? false);
+
+      // Set initial velocity (invert Y for user space)
+      scene.matter.body.setVelocity(body, {
+        x: physics.velocityX ?? 0,
+        y: -(physics.velocityY ?? 0) // Invert Y for user space
+      });
+
+      // Set body type (static bodies don't move)
+      if (physics.bodyType === 'static') {
+        scene.matter.body.setStatic(body, true);
+      }
+
+      // Configure rotation
+      if (!physics.allowRotation) {
+        scene.matter.body.setInertia(body, Infinity); // Prevent rotation
+      }
+
+      // Gravity scale - uses Matter.js built-in gravityScale property
+      // Default of 1 means normal gravity, 0 means no gravity, 2 means double, etc.
+      body.gravityScale = { x: 0, y: physics.gravityY ?? 1 };
     }
 
     // Generate and execute code for this object (use effective blocklyXml)
@@ -901,8 +973,13 @@ function createObjectVisual(
     // Send selection to back, bring hit area to front for input
     if (selectionRect) container.sendToBack(selectionRect);
     if (hitRect) container.bringToTop(hitRect);
-    // Ensure hit area is properly configured
-    updateContainerSize(64, 64);
+    // Ensure hit area is properly configured for placeholder
+    if (hitRect) {
+      hitRect.setSize(64, 64);
+    }
+    if (selectionRect) {
+      selectionRect.setSize(72, 72);
+    }
   }
 
   return container;

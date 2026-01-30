@@ -61,7 +61,7 @@ export class RuntimeEngine {
   private _groundY: number = -200; // User space (Y-up)
   private _groundColor: string = '#8B4513';
   private _groundGraphics: Phaser.GameObjects.Graphics | null = null;
-  private _groundZone: Phaser.GameObjects.Zone | null = null;
+  private _groundBody: MatterJS.BodyType | null = null;
 
   // Canvas dimensions for coordinate conversion
   private _canvasWidth: number = 800;
@@ -367,25 +367,10 @@ export class RuntimeEngine {
     // Clear touching pairs from previous frame
     this._touchingPairs.clear();
 
-    // Update rotation based on velocity for sprites with allowRotation enabled
+    // Clear ground touching flags at end of frame for all sprites
+    // Gravity is handled by Matter.js via body.gravityScale property
     for (const sprite of this.sprites.values()) {
-      const body = sprite.container.body as Phaser.Physics.Arcade.Body;
-      const allowRotation = sprite.container.getData('allowRotation');
-
-      if (body && allowRotation) {
-        // Rotate to face velocity direction
-        const vx = body.velocity.x;
-        const vy = body.velocity.y;
-        const speed = Math.sqrt(vx * vx + vy * vy);
-
-        if (speed > 10) { // Only rotate if moving fast enough
-          const angle = Math.atan2(vy, vx);
-          sprite.container.setRotation(angle);
-        }
-      }
-
-      // Clear ground touching flags at end of frame
-      // They will be set again by collision callbacks next physics step
+      // Clear ground touching flags - they will be set again by collision callbacks next physics step
       sprite.setTouchingGround(false);
     }
 
@@ -399,39 +384,50 @@ export class RuntimeEngine {
   setupPhysicsColliders(): void {
     const sprites = Array.from(this.sprites.values());
 
-    // Set up collision and overlap detection between all sprite pairs
-    for (let i = 0; i < sprites.length; i++) {
-      for (let j = i + 1; j < sprites.length; j++) {
-        const spriteA = sprites[i];
-        const spriteB = sprites[j];
+    // Matter.js handles collisions automatically between all bodies
+    // We just need to listen for collision events for "when touching" handlers
 
-        // Physical collision (makes sprites bounce off each other)
-        this.scene.physics.add.collider(
-          spriteA.container,
-          spriteB.container
-        );
+    // Listen for Matter.js collision events
+    this.scene.matter.world.on('collisionstart', (event: Phaser.Physics.Matter.Events.CollisionStartEvent) => {
+      for (const pair of event.pairs) {
+        const bodyA = pair.bodyA;
+        const bodyB = pair.bodyB;
 
-        // Overlap detection for "when touching" events
-        this.scene.physics.add.overlap(
-          spriteA.container,
-          spriteB.container,
-          () => this.handleSpriteOverlap(spriteA.id, spriteB.id)
-        );
+        // Find sprites by their body
+        let spriteIdA: string | null = null;
+        let spriteIdB: string | null = null;
+
+        for (const sprite of this.sprites.values()) {
+          const spriteBody = (sprite.container as unknown as { body?: MatterJS.BodyType }).body;
+          if (spriteBody === bodyA || spriteBody?.parent === bodyA) {
+            spriteIdA = sprite.id;
+          }
+          if (spriteBody === bodyB || spriteBody?.parent === bodyB) {
+            spriteIdB = sprite.id;
+          }
+        }
+
+        // Check for ground collision
+        if (bodyA === this._groundBody || bodyB === this._groundBody) {
+          const spriteId = bodyA === this._groundBody ? spriteIdB : spriteIdA;
+          if (spriteId) {
+            this.handleGroundCollision(spriteId);
+          }
+        }
+
+        // Handle sprite-to-sprite collision
+        if (spriteIdA && spriteIdB) {
+          this.handleSpriteOverlap(spriteIdA, spriteIdB);
+        }
       }
+    });
+
+    // Set up ground body if ground is enabled
+    if (this._groundEnabled) {
+      this.updateGroundBody();
     }
 
-    // Set up ground collisions if ground is enabled
-    if (this._groundEnabled && this._groundZone) {
-      for (const sprite of sprites) {
-        this.scene.physics.add.collider(
-          sprite.container,
-          this._groundZone,
-          () => this.handleGroundCollision(sprite.id)
-        );
-      }
-    }
-
-    debugLog('info', `Physics colliders set up for ${sprites.length} sprites`);
+    debugLog('info', `Physics colliders set up for ${sprites.length} sprites (Matter.js)`);
   }
 
   private handleGroundCollision(spriteId: string): void {
@@ -685,14 +681,8 @@ export class RuntimeEngine {
     const sprite = this.sprites.get(spriteId);
     if (!sprite) return false;
 
-    // Handle EDGE special case - check if touching world bounds
+    // Handle EDGE special case - check if touching canvas bounds
     if (targetId === 'EDGE') {
-      const body = sprite.container.body as Phaser.Physics.Arcade.Body | null;
-      if (body) {
-        // Check if physics body is touching world bounds
-        return body.blocked.up || body.blocked.down || body.blocked.left || body.blocked.right;
-      }
-      // Fallback: check if sprite bounds are outside canvas
       const bounds = sprite.container.getBounds();
       return bounds.left <= 0 || bounds.right >= this._canvasWidth ||
              bounds.top <= 0 || bounds.bottom >= this._canvasHeight;
@@ -719,16 +709,23 @@ export class RuntimeEngine {
   }
 
   private isTouchingSingle(sprite: RuntimeSprite, target: RuntimeSprite): boolean {
-    // Use physics body overlap if both have physics bodies
-    const bodyA = sprite.container.body as Phaser.Physics.Arcade.Body | null;
-    const bodyB = target.container.body as Phaser.Physics.Arcade.Body | null;
+    // Use Matter.js body bounds for collision detection
+    const matterContainerA = sprite.container as unknown as { body?: MatterJS.BodyType };
+    const matterContainerB = target.container as unknown as { body?: MatterJS.BodyType };
+    const bodyA = matterContainerA.body;
+    const bodyB = matterContainerB.body;
 
     if (bodyA && bodyB) {
-      // Use physics-based overlap detection
-      return this.scene.physics.overlap(sprite.container, target.container);
+      // Check AABB overlap using Matter.js bounds
+      const boundsA = bodyA.bounds;
+      const boundsB = bodyB.bounds;
+      return !(boundsA.max.x < boundsB.min.x ||
+               boundsA.min.x > boundsB.max.x ||
+               boundsA.max.y < boundsB.min.y ||
+               boundsA.min.y > boundsB.max.y);
     }
 
-    // Fallback to bounds intersection
+    // Fallback to Phaser bounds intersection
     const boundsA = sprite.container.getBounds();
     const boundsB = target.container.getBounds();
     return Phaser.Geom.Intersects.RectangleToRectangle(boundsA, boundsB);
@@ -884,34 +881,14 @@ export class RuntimeEngine {
     this._groundEnabled = enabled;
     this.updateGroundVisual();
     this.updateGroundBody();
-
-    // If enabling, add colliders for all existing sprites
-    if (enabled && this._groundZone) {
-      for (const sprite of this.sprites.values()) {
-        this.scene.physics.add.collider(
-          sprite.container,
-          this._groundZone,
-          () => this.handleGroundCollision(sprite.id)
-        );
-      }
-    }
+    // Matter.js collision detection is set up automatically via world events
   }
 
   setGroundY(y: number): void {
     this._groundY = y;
     this.updateGroundVisual();
     this.updateGroundBody();
-
-    // Re-add colliders if ground is enabled
-    if (this._groundEnabled && this._groundZone) {
-      for (const sprite of this.sprites.values()) {
-        this.scene.physics.add.collider(
-          sprite.container,
-          this._groundZone,
-          () => this.handleGroundCollision(sprite.id)
-        );
-      }
-    }
+    // Matter.js collision detection is set up automatically via world events
   }
 
   setGroundColor(color: string): void {
@@ -970,21 +947,26 @@ export class RuntimeEngine {
   }
 
   private updateGroundBody(): void {
-    // Remove old ground zone if it exists
-    if (this._groundZone) {
-      this._groundZone.destroy();
-      this._groundZone = null;
+    // Remove old ground body if it exists
+    if (this._groundBody) {
+      this.scene.matter.world.remove(this._groundBody);
+      this._groundBody = null;
     }
 
     if (this._groundEnabled) {
       // Convert user Y to Phaser Y
       const phaserGroundY = this._canvasHeight / 2 - this._groundY;
 
-      // Create a zone for ground collision
+      // Create a static Matter.js body for the ground
       const groundWidth = 10000;
       const groundHeight = 100;
-      this._groundZone = this.scene.add.zone(0, phaserGroundY + groundHeight / 2, groundWidth, groundHeight);
-      this.scene.physics.add.existing(this._groundZone, true); // true = static body
+      this._groundBody = this.scene.matter.add.rectangle(
+        this._canvasWidth / 2, // Center X
+        phaserGroundY + groundHeight / 2, // Y position
+        groundWidth,
+        groundHeight,
+        { isStatic: true, label: 'ground' }
+      );
 
       debugLog('info', `Ground body created at user y=${this._groundY}, phaser y=${phaserGroundY}`);
     }
@@ -992,15 +974,11 @@ export class RuntimeEngine {
 
   /**
    * Add a sprite to ground collision (called after sprite is registered)
+   * Matter.js handles collisions automatically via world events
    */
-  addSpriteToGroundCollision(sprite: RuntimeSprite): void {
-    if (this._groundEnabled && this._groundZone) {
-      this.scene.physics.add.collider(
-        sprite.container,
-        this._groundZone,
-        () => this.handleGroundCollision(sprite.id)
-      );
-    }
+  addSpriteToGroundCollision(_sprite: RuntimeSprite): void {
+    // Matter.js collision detection is set up automatically via world events
+    // No explicit collider setup needed
   }
 
   // --- Scene switching ---

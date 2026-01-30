@@ -82,7 +82,7 @@ export function CostumeEditor() {
 
     justSavedRef.current = true;
     const updatedCostumes = freshCostumes.map((c, i) =>
-      i === freshCostumeIndex ? { ...c, assetId: dataUrl, bounds } : c
+      i === freshCostumeIndex ? { ...c, assetId: dataUrl, bounds: bounds || undefined } : c
     );
 
     updateObject(sceneId, objectId, { costumes: updatedCostumes });
@@ -145,7 +145,7 @@ export function CostumeEditor() {
     if (canvasRef.current && costumes.length > 0) {
       const { dataUrl, bounds } = canvasRef.current.toDataURLWithBounds();
       const updatedCostumes = costumes.map((c, i) =>
-        i === currentCostumeIndex ? { ...c, assetId: dataUrl, bounds } : c
+        i === currentCostumeIndex ? { ...c, assetId: dataUrl, bounds: bounds || undefined } : c
       );
       // Clear the costume ID ref to force reload of new costume
       currentCostumeIdRef.current = null;
@@ -166,7 +166,7 @@ export function CostumeEditor() {
     if (canvasRef.current && costumes.length > 0) {
       const { dataUrl, bounds } = canvasRef.current.toDataURLWithBounds();
       const updatedCostumes = costumes.map((c, i) =>
-        i === currentCostumeIndex ? { ...c, assetId: dataUrl, bounds } : c
+        i === currentCostumeIndex ? { ...c, assetId: dataUrl, bounds: bounds || undefined } : c
       );
       // Clear the costume ID ref to force reload of new costume
       currentCostumeIdRef.current = null;

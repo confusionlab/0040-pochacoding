@@ -139,7 +139,7 @@ export function ObjectPicker() {
  */
 function createPickerScene(
   scene: Phaser.Scene,
-  sceneData: { objects: GameObject[]; background?: { type: string; value: string } },
+  sceneData: { objects: GameObject[]; background?: { type: string; value: string } | null },
   components: ComponentDefinition[],
   canvasWidth: number,
   canvasHeight: number,

@@ -167,7 +167,7 @@ function SortableObjectItem({
 }
 
 export function SpriteShelf() {
-  const { project, addObject, removeObject, duplicateObject, updateObject, updateScene, reorderObject, addScene, makeComponent, detachFromComponent, addComponentInstance } = useProjectStore();
+  const { project, addObject, removeObject, duplicateObject, updateObject, updateScene, reorderObject, addScene, makeComponent, detachFromComponent } = useProjectStore();
   const { selectedSceneId, selectedObjectId, selectObject, selectScene } = useEditorStore();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; object: GameObject } | null>(null);
   const [editingObjectId, setEditingObjectId] = useState<string | null>(null);

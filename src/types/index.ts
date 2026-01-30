@@ -262,7 +262,7 @@ export function createDefaultPhysicsConfig(): PhysicsConfig {
   return {
     enabled: true,
     bodyType: 'dynamic',
-    gravityY: 300,
+    gravityY: 1, // Matter.js gravity scale: 1 = normal gravity, 0 = none, 2 = double
     velocityX: 0,
     velocityY: 0,
     bounce: 0.2,
