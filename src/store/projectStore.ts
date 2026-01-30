@@ -219,34 +219,87 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       const scene = state.project.scenes.find(s => s.id === sceneId);
       const obj = scene?.objects.find(o => o.id === objectId);
 
-      // If updating name of a component instance, update the component and all instances
-      if (updates.name && obj?.componentId) {
+      // For component instances, some properties sync to component (shared across instances)
+      // and some are instance-specific (not synced)
+      if (obj?.componentId) {
         const componentId = obj.componentId;
-        return {
-          project: {
-            ...state.project,
-            // Update component definition name
-            components: (state.project.components || []).map(c =>
-              c.id === componentId ? { ...c, name: updates.name! } : c
-            ),
-            // Update all instances of this component across all scenes
-            scenes: state.project.scenes.map(s => ({
-              ...s,
-              objects: s.objects.map(o =>
-                o.componentId === componentId
-                  ? { ...o, name: updates.name! }
-                  : o.id === objectId
-                    ? { ...o, ...updates }
-                    : o
+
+        // Properties that sync to component definition (shared)
+        const syncedKeys: (keyof GameObject)[] = ['name', 'costumes', 'currentCostumeIndex', 'sounds', 'blocklyXml'];
+        const syncedUpdates: Partial<ComponentDefinition> = {};
+        const instanceUpdates: Partial<GameObject> = {};
+
+        for (const key of Object.keys(updates) as (keyof GameObject)[]) {
+          if (syncedKeys.includes(key)) {
+            // These sync to component
+            (syncedUpdates as Record<string, unknown>)[key] = updates[key];
+          } else {
+            // These are instance-specific
+            (instanceUpdates as Record<string, unknown>)[key] = updates[key];
+          }
+        }
+
+        // If we have synced updates, update component and all instances
+        if (Object.keys(syncedUpdates).length > 0) {
+          return {
+            project: {
+              ...state.project,
+              // Update component definition
+              components: (state.project.components || []).map(c =>
+                c.id === componentId ? { ...c, ...syncedUpdates } : c
               ),
-            })),
-            updatedAt: new Date(),
-          },
-          isDirty: true,
-        };
+              // Update all instances with synced properties + this instance with instance-specific
+              scenes: state.project.scenes.map(s => ({
+                ...s,
+                objects: s.objects.map(o => {
+                  if (o.componentId === componentId) {
+                    // All instances get synced updates
+                    const syncedObjUpdates: Partial<GameObject> = {};
+                    if (syncedUpdates.name !== undefined) syncedObjUpdates.name = syncedUpdates.name;
+                    if (syncedUpdates.costumes !== undefined) syncedObjUpdates.costumes = syncedUpdates.costumes;
+                    if (syncedUpdates.currentCostumeIndex !== undefined) syncedObjUpdates.currentCostumeIndex = syncedUpdates.currentCostumeIndex;
+                    if (syncedUpdates.sounds !== undefined) syncedObjUpdates.sounds = syncedUpdates.sounds;
+
+                    // This specific instance also gets instance-specific updates
+                    if (o.id === objectId) {
+                      return { ...o, ...syncedObjUpdates, ...instanceUpdates };
+                    }
+                    return { ...o, ...syncedObjUpdates };
+                  }
+                  return o;
+                }),
+              })),
+              updatedAt: new Date(),
+            },
+            isDirty: true,
+          };
+        }
+
+        // Only instance-specific updates
+        if (Object.keys(instanceUpdates).length > 0) {
+          return {
+            project: {
+              ...state.project,
+              scenes: state.project.scenes.map(s =>
+                s.id === sceneId
+                  ? {
+                      ...s,
+                      objects: s.objects.map(o =>
+                        o.id === objectId ? { ...o, ...instanceUpdates } : o
+                      ),
+                    }
+                  : s
+              ),
+              updatedAt: new Date(),
+            },
+            isDirty: true,
+          };
+        }
+
+        return state;
       }
 
-      // Regular object update
+      // Regular object update (not a component instance)
       return {
         project: {
           ...state.project,
