@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Project, Scene, GameObject, Variable, ComponentDefinition } from '../types';
+import type { Project, Scene, GameObject, Variable, ComponentDefinition, ColliderConfig } from '../types';
 import { createDefaultProject, createDefaultScene, createDefaultGameObject } from '../types';
 import { saveProject } from '../db/database';
 
@@ -225,7 +225,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         const componentId = obj.componentId;
 
         // Properties that sync to component definition (shared)
-        const syncedKeys: (keyof GameObject)[] = ['name', 'costumes', 'currentCostumeIndex', 'sounds', 'blocklyXml'];
+        const syncedKeys: (keyof GameObject)[] = ['name', 'costumes', 'currentCostumeIndex', 'sounds', 'blocklyXml', 'collider'];
         const syncedUpdates: Partial<ComponentDefinition> = {};
         const instanceUpdates: Partial<GameObject> = {};
 
@@ -259,6 +259,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                     if (syncedUpdates.costumes !== undefined) syncedObjUpdates.costumes = syncedUpdates.costumes;
                     if (syncedUpdates.currentCostumeIndex !== undefined) syncedObjUpdates.currentCostumeIndex = syncedUpdates.currentCostumeIndex;
                     if (syncedUpdates.sounds !== undefined) syncedObjUpdates.sounds = syncedUpdates.sounds;
+                    if (syncedUpdates.collider !== undefined) syncedObjUpdates.collider = syncedUpdates.collider as ColliderConfig | null;
 
                     // This specific instance also gets instance-specific updates
                     if (o.id === objectId) {
@@ -441,6 +442,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       costumes: obj.costumes,
       currentCostumeIndex: obj.currentCostumeIndex,
       physics: obj.physics,
+      collider: obj.collider,
       sounds: obj.sounds,
     };
 
@@ -504,6 +506,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                 costumes: component.costumes,
                 currentCostumeIndex: component.currentCostumeIndex,
                 physics: component.physics,
+                collider: component.collider,
                 sounds: component.sounds,
               };
             }
@@ -545,6 +548,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       componentId,
       // These are ignored when componentId is set, but we need them for the type
       physics: null,
+      collider: null,
       blocklyXml: '',
       costumes: [],
       currentCostumeIndex: 0,
@@ -596,6 +600,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                           costumes: component.costumes,
                           currentCostumeIndex: component.currentCostumeIndex,
                           physics: component.physics,
+                          collider: component.collider,
                           sounds: component.sounds,
                         }
                       : o

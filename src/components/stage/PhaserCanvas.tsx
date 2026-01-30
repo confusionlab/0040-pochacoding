@@ -264,52 +264,113 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
         const currentCostumeIndex = effectiveProps.currentCostumeIndex ?? 0;
         const currentCostume = costumes[currentCostumeIndex];
         const storedCostumeId = container.getData('costumeId');
+        const storedAssetId = container.getData('assetId');
 
-        if (currentCostume && currentCostume.id !== storedCostumeId) {
+        // Check if costume ID or asset content changed
+        const costumeChanged = currentCostume && (
+          currentCostume.id !== storedCostumeId ||
+          currentCostume.assetId !== storedAssetId
+        );
+
+        if (costumeChanged) {
           // Costume changed - update the sprite
           const existingSprite = container.getByName('sprite') as Phaser.GameObjects.Image | null;
+
+          // Get the old texture key to remove it
+          const oldTextureKey = container.getData('textureKey') as string | undefined;
+
           if (existingSprite) {
             existingSprite.destroy();
           }
 
-          // Helper to update container with new sprite
-          const updateWithSprite = (sprite: Phaser.GameObjects.Image, cont: Phaser.GameObjects.Container) => {
+          // Remove old texture to force reload with new content
+          if (oldTextureKey && phaserScene.textures.exists(oldTextureKey)) {
+            phaserScene.textures.remove(oldTextureKey);
+          }
+
+          // Helper to update container with new sprite using bounds
+          const updateWithSprite = (
+            sprite: Phaser.GameObjects.Image,
+            cont: Phaser.GameObjects.Container,
+            bounds: { x: number; y: number; width: number; height: number } | null | undefined
+          ) => {
             sprite.setName('sprite');
             cont.add(sprite);
-            const width = Math.max(sprite.width, 32);
-            const height = Math.max(sprite.height, 32);
-            cont.setSize(width, height);
-            // Update hit area rectangle size and refresh interactive
-            const hitRect = cont.getByName('hitArea') as Phaser.GameObjects.Rectangle | null;
-            if (hitRect) {
-              hitRect.setSize(width, height);
-              hitRect.removeInteractive();
-              hitRect.setInteractive({ useHandCursor: true });
-              phaserScene.input.setDraggable(hitRect);
-            }
-            // Update selection rectangle size
-            const selRect = cont.getByName('selection') as Phaser.GameObjects.Rectangle | null;
-            if (selRect) {
-              selRect.setSize(width + 8, height + 8);
-              cont.sendToBack(selRect);
+
+            const imgWidth = sprite.width;
+            const imgHeight = sprite.height;
+
+            // If we have bounds, use them for sizing and offset the sprite
+            if (bounds && bounds.width > 0 && bounds.height > 0) {
+              const w = Math.max(bounds.width, 32);
+              const h = Math.max(bounds.height, 32);
+
+              // Calculate sprite offset to center visible content at container origin
+              const visibleCenterX = bounds.x + bounds.width / 2;
+              const visibleCenterY = bounds.y + bounds.height / 2;
+              const spriteOffsetX = imgWidth / 2 - visibleCenterX;
+              const spriteOffsetY = imgHeight / 2 - visibleCenterY;
+
+              sprite.setPosition(spriteOffsetX, spriteOffsetY);
+              cont.setSize(w, h);
+
+              const hitRect = cont.getByName('hitArea') as Phaser.GameObjects.Rectangle | null;
+              if (hitRect) {
+                hitRect.setSize(w, h);
+                hitRect.removeInteractive();
+                hitRect.setInteractive({ useHandCursor: true });
+                phaserScene.input.setDraggable(hitRect);
+              }
+
+              const selRect = cont.getByName('selection') as Phaser.GameObjects.Rectangle | null;
+              if (selRect) {
+                selRect.setSize(w + 8, h + 8);
+                cont.sendToBack(selRect);
+              }
+            } else {
+              // No bounds - use full image size (fallback)
+              const width = Math.max(imgWidth, 32);
+              const height = Math.max(imgHeight, 32);
+
+              sprite.setPosition(0, 0);
+              cont.setSize(width, height);
+
+              const hitRect = cont.getByName('hitArea') as Phaser.GameObjects.Rectangle | null;
+              if (hitRect) {
+                hitRect.setSize(width, height);
+                hitRect.removeInteractive();
+                hitRect.setInteractive({ useHandCursor: true });
+                phaserScene.input.setDraggable(hitRect);
+              }
+
+              const selRect = cont.getByName('selection') as Phaser.GameObjects.Rectangle | null;
+              if (selRect) {
+                selRect.setSize(width + 8, height + 8);
+                cont.sendToBack(selRect);
+              }
             }
           };
 
-          const textureKey = `costume_${obj.id}_${currentCostume.id}`;
-          if (!phaserScene.textures.exists(textureKey)) {
-            const img = new Image();
-            img.onload = () => {
-              if (phaserScene.textures.exists(textureKey)) return;
-              phaserScene.textures.addImage(textureKey, img);
-              const sprite = phaserScene.add.image(0, 0, textureKey);
-              updateWithSprite(sprite, container!);
-            };
-            img.src = currentCostume.assetId;
-          } else {
+          // Use a unique texture key with timestamp to guarantee uniqueness
+          const textureKey = `costume_${obj.id}_${currentCostume.id}_${Date.now()}`;
+
+          // Always load fresh - we removed any existing texture above
+          const img = new Image();
+          img.onload = () => {
+            // Check if container still exists and this is still the expected costume
+            if (!container || container.getData('assetId') !== currentCostume.assetId) return;
+            if (phaserScene.textures.exists(textureKey)) return;
+
+            phaserScene.textures.addImage(textureKey, img);
             const sprite = phaserScene.add.image(0, 0, textureKey);
-            updateWithSprite(sprite, container);
-          }
+            updateWithSprite(sprite, container, currentCostume.bounds);
+          };
+          img.src = currentCostume.assetId;
+
           container.setData('costumeId', currentCostume.id);
+          container.setData('assetId', currentCostume.assetId);
+          container.setData('textureKey', textureKey);
+          container.setData('bounds', currentCostume.bounds);
         }
       }
 
@@ -734,24 +795,61 @@ function createObjectVisual(
     });
   }
 
-  // Helper to update container size, hit area, and selection rect
-  const updateContainerSize = (width: number, height: number) => {
-    const w = Math.max(width, 32);
-    const h = Math.max(height, 32);
-    container.setSize(w, h);
+  // Helper to update container size, hit area, and selection rect based on bounds
+  const updateContainerWithBounds = (
+    sprite: Phaser.GameObjects.Image,
+    bounds: { x: number; y: number; width: number; height: number } | null | undefined
+  ) => {
+    const imgWidth = sprite.width;
+    const imgHeight = sprite.height;
 
-    // Update hit area rectangle size and refresh interactive bounds
-    if (hitRect) {
-      hitRect.setSize(w, h);
-      // Must refresh interactive to update hit area bounds
-      hitRect.removeInteractive();
-      hitRect.setInteractive({ useHandCursor: true });
-      scene.input.setDraggable(hitRect);
-    }
+    // If we have bounds, use them for sizing and offset the sprite
+    if (bounds && bounds.width > 0 && bounds.height > 0) {
+      const w = Math.max(bounds.width, 32);
+      const h = Math.max(bounds.height, 32);
 
-    // Update selection rectangle size
-    if (selectionRect) {
-      selectionRect.setSize(w + 8, h + 8);
+      // Calculate sprite offset to center visible content at container origin
+      // Sprite origin is at center, so we need to offset by the difference
+      // between the image center and the visible bounds center
+      const visibleCenterX = bounds.x + bounds.width / 2;
+      const visibleCenterY = bounds.y + bounds.height / 2;
+      const spriteOffsetX = imgWidth / 2 - visibleCenterX;
+      const spriteOffsetY = imgHeight / 2 - visibleCenterY;
+
+      sprite.setPosition(spriteOffsetX, spriteOffsetY);
+
+      container.setSize(w, h);
+
+      // Update hit area rectangle
+      if (hitRect) {
+        hitRect.setSize(w, h);
+        hitRect.removeInteractive();
+        hitRect.setInteractive({ useHandCursor: true });
+        scene.input.setDraggable(hitRect);
+      }
+
+      // Update selection rectangle
+      if (selectionRect) {
+        selectionRect.setSize(w + 8, h + 8);
+      }
+    } else {
+      // No bounds - use full image size (fallback)
+      const w = Math.max(imgWidth, 32);
+      const h = Math.max(imgHeight, 32);
+
+      sprite.setPosition(0, 0);
+      container.setSize(w, h);
+
+      if (hitRect) {
+        hitRect.setSize(w, h);
+        hitRect.removeInteractive();
+        hitRect.setInteractive({ useHandCursor: true });
+        scene.input.setDraggable(hitRect);
+      }
+
+      if (selectionRect) {
+        selectionRect.setSize(w + 8, h + 8);
+      }
     }
   };
 
@@ -762,40 +860,31 @@ function createObjectVisual(
   const currentCostume = costumes[currentCostumeIndex];
 
   if (currentCostume && currentCostume.assetId) {
-    // Store costume ID for change detection
+    // Use unique texture key with timestamp
+    const textureKey = `costume_${obj.id}_${currentCostume.id}_${Date.now()}`;
+
+    // Store costume ID, assetId, textureKey, and bounds for change detection
     container.setData('costumeId', currentCostume.id);
+    container.setData('assetId', currentCostume.assetId);
+    container.setData('textureKey', textureKey);
+    container.setData('bounds', currentCostume.bounds);
 
-    // Load and display the costume image
-    const textureKey = `costume_${obj.id}_${currentCostume.id}`;
+    // Load texture from data URL (always fresh load with unique key)
+    const img = new Image();
+    img.onload = () => {
+      if (scene.textures.exists(textureKey)) return; // Avoid double-add
+      scene.textures.addImage(textureKey, img);
 
-    // Check if texture already exists
-    if (!scene.textures.exists(textureKey)) {
-      // Load texture from data URL
-      const img = new Image();
-      img.onload = () => {
-        if (scene.textures.exists(textureKey)) return; // Avoid double-add
-        scene.textures.addImage(textureKey, img);
-
-        // Create sprite after texture is loaded
-        const sprite = scene.add.image(0, 0, textureKey);
-        sprite.setName('sprite');
-        container.add(sprite);
-        // Send selection to back, bring hit area to front for input
-        if (selectionRect) container.sendToBack(selectionRect);
-        if (hitRect) container.bringToTop(hitRect);
-        updateContainerSize(sprite.width, sprite.height);
-      };
-      img.src = currentCostume.assetId;
-    } else {
-      // Texture already exists, create sprite immediately
+      // Create sprite after texture is loaded
       const sprite = scene.add.image(0, 0, textureKey);
       sprite.setName('sprite');
       container.add(sprite);
       // Send selection to back, bring hit area to front for input
       if (selectionRect) container.sendToBack(selectionRect);
       if (hitRect) container.bringToTop(hitRect);
-      updateContainerSize(sprite.width, sprite.height);
-    }
+      updateContainerWithBounds(sprite, currentCostume.bounds);
+    };
+    img.src = currentCostume.assetId;
   } else {
     // No costume - create colored rectangle as placeholder
     const graphics = scene.add.graphics();

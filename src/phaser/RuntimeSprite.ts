@@ -241,6 +241,23 @@ export class RuntimeSprite {
 
     this._costumeImage = this.scene.add.image(0, 0, textureKey);
     this._costumeImage.setOrigin(0.5, 0.5);
+
+    // Get current costume bounds and offset the image to center visible content
+    const costume = this._costumes[this._currentCostumeIndex];
+    if (costume?.bounds && costume.bounds.width > 0 && costume.bounds.height > 0) {
+      const imgWidth = this._costumeImage.width;
+      const imgHeight = this._costumeImage.height;
+      const bounds = costume.bounds;
+
+      // Calculate offset to center visible content at container origin
+      const visibleCenterX = bounds.x + bounds.width / 2;
+      const visibleCenterY = bounds.y + bounds.height / 2;
+      const spriteOffsetX = imgWidth / 2 - visibleCenterX;
+      const spriteOffsetY = imgHeight / 2 - visibleCenterY;
+
+      this._costumeImage.setPosition(spriteOffsetX, spriteOffsetY);
+    }
+
     this.container.addAt(this._costumeImage, 0);
 
     // Re-setup click handler with pixel-perfect detection if one was registered
@@ -411,9 +428,8 @@ export class RuntimeSprite {
   }
 
   /**
-   * Update physics body size to match the current costume/visual
+   * Update physics body size to match the current costume bounds (visible content)
    */
-
   updatePhysicsBodySize(): void {
     const body = this.getBody();
     if (!body) return;
@@ -421,8 +437,13 @@ export class RuntimeSprite {
     let width = 64;
     let height = 64;
 
-    // Use costume image dimensions if available
-    if (this._costumeImage) {
+    // Prefer using costume bounds if available
+    const costume = this._costumes[this._currentCostumeIndex];
+    if (costume?.bounds && costume.bounds.width > 0 && costume.bounds.height > 0) {
+      width = costume.bounds.width;
+      height = costume.bounds.height;
+    } else if (this._costumeImage) {
+      // Fallback to image dimensions if no bounds
       width = this._costumeImage.displayWidth || this._costumeImage.width;
       height = this._costumeImage.displayHeight || this._costumeImage.height;
     }
@@ -436,7 +457,7 @@ export class RuntimeSprite {
     // we need the body centered at (0,0) as well
     body.setSize(width, height, true); // true = center the body on game object
 
-    debugLog('info', `${this.name}: Physics body size set to ${width}x${height}`);
+    debugLog('info', `${this.name}: Physics body size set to ${width}x${height} (from bounds: ${!!costume?.bounds})`);
   }
 
   // --- Control ---

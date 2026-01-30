@@ -19,6 +19,7 @@ export interface ComponentDefinition {
   costumes: Costume[];
   currentCostumeIndex: number;
   physics: PhysicsConfig | null;
+  collider: ColliderConfig | null;
   sounds: Sound[];
 }
 
@@ -71,26 +72,46 @@ export interface GameObject {
   rotation: number;
   visible: boolean;
   layer: number;
-  // If componentId is set, physics/blocklyXml/costumes/sounds come from the component
+  // If componentId is set, physics/blocklyXml/costumes/sounds/collider come from the component
   componentId?: string;
   // Instance-level overrides (only used if componentId is not set)
   physics: PhysicsConfig | null;
+  collider: ColliderConfig | null;
   blocklyXml: string;
   costumes: Costume[];
   currentCostumeIndex: number;
   sounds: Sound[];
 }
 
+export interface CostumeBounds {
+  x: number;      // Left edge of visible content
+  y: number;      // Top edge of visible content
+  width: number;  // Width of visible content
+  height: number; // Height of visible content
+}
+
 export interface Costume {
   id: string;
   name: string;
   assetId: string; // Reference to Asset
+  bounds?: CostumeBounds; // Bounding box of visible (non-transparent) pixels
 }
 
 export interface Sound {
   id: string;
   name: string;
   assetId: string; // Reference to Asset
+}
+
+export interface ColliderConfig {
+  type: 'none' | 'box' | 'circle' | 'capsule';
+  // Offset from object origin (center) in canvas space
+  offsetX: number;
+  offsetY: number;
+  // Dimensions (interpretation depends on type)
+  width: number;   // box width, capsule width
+  height: number;  // box height, capsule height
+  radius: number;  // circle radius
 }
 
 export interface PhysicsConfig {
@@ -220,10 +241,22 @@ export function createDefaultGameObject(name: string): GameObject {
     visible: true,
     layer: 0,
     physics: null,
+    collider: null,
     blocklyXml: '',
     costumes: [defaultCostume],
     currentCostumeIndex: 0,
     sounds: [],
+  };
+}
+
+export function createDefaultColliderConfig(type: ColliderConfig['type'] = 'circle'): ColliderConfig {
+  return {
+    type,
+    offsetX: 0,
+    offsetY: 0,
+    width: 64,
+    height: 64,
+    radius: 32,
   };
 }
 
@@ -250,6 +283,7 @@ export function getEffectiveObjectProps(
   costumes: Costume[];
   currentCostumeIndex: number;
   physics: PhysicsConfig | null;
+  collider: ColliderConfig | null;
   sounds: Sound[];
 } {
   if (obj.componentId) {
@@ -260,6 +294,7 @@ export function getEffectiveObjectProps(
         costumes: component.costumes,
         currentCostumeIndex: component.currentCostumeIndex,
         physics: component.physics,
+        collider: component.collider ?? null,
         sounds: component.sounds,
       };
     }
@@ -269,6 +304,7 @@ export function getEffectiveObjectProps(
     costumes: obj.costumes,
     currentCostumeIndex: obj.currentCostumeIndex,
     physics: obj.physics,
+    collider: obj.collider,
     sounds: obj.sounds,
   };
 }

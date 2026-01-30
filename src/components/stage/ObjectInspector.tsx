@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/color-picker';
 import { RotateCw, FlipHorizontal, FlipVertical, Link, Unlink, Component } from 'lucide-react';
 import type { GameObject, Scene, GroundConfig, PhysicsConfig } from '@/types';
+import { createDefaultColliderConfig } from '@/types';
 
 // Color swatch with popup picker
 interface ColorSwatchProps {
@@ -503,9 +504,11 @@ function PhysicsToggle({ object, sceneId, updateObject }: FieldProps) {
 
   const togglePhysics = (checked: boolean) => {
     if (!checked) {
+      // Keep collider when physics is turned off (as per requirement)
       updateObject(sceneId, object.id, { physics: null });
     } else {
-      updateObject(sceneId, object.id, {
+      // Enable physics with default settings
+      const updates: Partial<GameObject> = {
         physics: {
           enabled: true,
           bodyType: 'dynamic',
@@ -517,7 +520,14 @@ function PhysicsToggle({ object, sceneId, updateObject }: FieldProps) {
           collideWorldBounds: true,
           immovable: false,
         },
-      });
+      };
+
+      // If no collider exists, create a default circle collider
+      if (!object.collider || object.collider.type === 'none') {
+        updates.collider = createDefaultColliderConfig('circle');
+      }
+
+      updateObject(sceneId, object.id, updates);
     }
   };
 
