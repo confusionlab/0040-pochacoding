@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Project, Scene, GameObject, Variable, ComponentDefinition } from '../types';
-import { createDefaultProject, createDefaultScene, createDefaultGameObject, COMPONENT_COLOR } from '../types';
+import { createDefaultProject, createDefaultScene, createDefaultGameObject } from '../types';
 import { saveProject } from '../db/database';
 
 interface ProjectStore {
@@ -390,21 +390,6 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       physics: obj.physics,
       sounds: obj.sounds,
     };
-
-    // Generate pastel purple costume for component
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-      <circle cx="32" cy="32" r="28" fill="${COMPONENT_COLOR}" stroke="#7c3aed" stroke-width="2"/>
-    </svg>`;
-    const componentCostume = {
-      id: crypto.randomUUID(),
-      name: 'component',
-      assetId: `data:image/svg+xml;base64,${btoa(svg)}`,
-    };
-
-    // Update component costumes if it only has default costume
-    if (component.costumes.length === 1 && component.costumes[0].name === 'costume1') {
-      component.costumes = [componentCostume];
-    }
 
     set(state => ({
       project: state.project

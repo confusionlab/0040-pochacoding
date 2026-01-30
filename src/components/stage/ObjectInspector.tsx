@@ -11,9 +11,8 @@ import {
   ColorPickerSelection,
   ColorPickerHue,
 } from '@/components/ui/color-picker';
-import { RotateCw, FlipHorizontal, FlipVertical, Link, Unlink } from 'lucide-react';
+import { RotateCw, FlipHorizontal, FlipVertical, Link, Unlink, Component } from 'lucide-react';
 import type { GameObject, Scene, GroundConfig, PhysicsConfig } from '@/types';
-import { COMPONENT_COLOR } from '@/types';
 
 // Color swatch with popup picker
 interface ColorSwatchProps {
@@ -302,9 +301,9 @@ function ObjectProperties({ object, sceneId, updateObject }: ObjectPropertiesPro
     <div className="space-y-4">
       {/* Component indicator */}
       {object.componentId && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ backgroundColor: COMPONENT_COLOR, border: '1px solid #7c3aed' }}>
-          <span className="text-xs font-medium text-purple-900">Component Instance</span>
-          <span className="text-xs text-purple-700">Code syncs across all instances</span>
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-muted/50">
+          <Component className="size-4 text-purple-600" />
+          <span className="text-xs text-muted-foreground">Component - code syncs across all instances</span>
         </div>
       )}
 
