@@ -138,9 +138,9 @@ export const CostumeList = memo(({
                   : 'hover:bg-accent'
               )}
             >
-              {/* Thumbnail with checkerboard for transparency */}
+              {/* Thumbnail with checkerboard for transparency - zoomed to bounds */}
               <div
-                className="aspect-square rounded mb-1.5 overflow-hidden border"
+                className="aspect-square rounded mb-1.5 overflow-hidden border relative"
                 style={{
                   backgroundImage: `
                     linear-gradient(45deg, #d0d0d0 25%, transparent 25%),
@@ -153,12 +153,38 @@ export const CostumeList = memo(({
                   backgroundColor: '#f0f0f0',
                 }}
               >
-                <img
-                  src={costume.assetId}
-                  alt={costume.name}
-                  className="w-full h-full object-contain"
-                  style={{ imageRendering: 'pixelated' }}
-                />
+                {costume.bounds && costume.bounds.width > 0 && costume.bounds.height > 0 ? (
+                  // Zoomed thumbnail using bounds
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      backgroundImage: `url(${costume.assetId})`,
+                      backgroundPosition: `${-costume.bounds.x}px ${-costume.bounds.y}px`,
+                      backgroundSize: '1024px 1024px',
+                      backgroundRepeat: 'no-repeat',
+                      transform: `scale(${Math.min(
+                        1,
+                        140 / Math.max(costume.bounds.width, costume.bounds.height)
+                      )})`,
+                      transformOrigin: 'top left',
+                      width: costume.bounds.width,
+                      height: costume.bounds.height,
+                      imageRendering: 'pixelated',
+                      left: '50%',
+                      top: '50%',
+                      marginLeft: -costume.bounds.width * Math.min(1, 140 / Math.max(costume.bounds.width, costume.bounds.height)) / 2,
+                      marginTop: -costume.bounds.height * Math.min(1, 140 / Math.max(costume.bounds.width, costume.bounds.height)) / 2,
+                    }}
+                  />
+                ) : (
+                  // Fallback: show full image
+                  <img
+                    src={costume.assetId}
+                    alt={costume.name}
+                    className="w-full h-full object-contain"
+                    style={{ imageRendering: 'pixelated' }}
+                  />
+                )}
               </div>
 
               {/* Costume name */}

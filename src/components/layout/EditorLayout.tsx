@@ -19,7 +19,7 @@ export function EditorLayout() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const { project, openProject, saveCurrentProject } = useProjectStore();
-  const { isPlaying, showProjectDialog, setShowProjectDialog, selectScene, startPlaying, stopPlaying } = useEditorStore();
+  const { isPlaying, showProjectDialog, setShowProjectDialog, selectScene, startPlaying, stopPlaying, undo, redo } = useEditorStore();
   const [dividerPosition, setDividerPosition] = useState(70);
   const [hoveredPanel, setHoveredPanel] = useState<HoveredPanel>(null);
   const [fullscreenPanel, setFullscreenPanel] = useState<FullscreenPanel>(null);
@@ -117,12 +117,26 @@ export function EditorLayout() {
       return;
     }
 
+    // Undo: Cmd+Z or Ctrl+Z
+    if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+      e.preventDefault();
+      undo();
+      return;
+    }
+
+    // Redo: Cmd+Shift+Z or Ctrl+Shift+Z
+    if ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey) {
+      e.preventDefault();
+      redo();
+      return;
+    }
+
     if (e.key === 'Enter' && !isTyping && !isPlaying && project && !fullscreenPanel) {
       e.preventDefault();
       startPlaying();
       return;
     }
-  }, [isPlaying, project, saveCurrentProject, startPlaying, stopPlaying, fullscreenPanel]);
+  }, [isPlaying, project, saveCurrentProject, startPlaying, stopPlaying, fullscreenPanel, undo, redo]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);

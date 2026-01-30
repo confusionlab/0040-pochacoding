@@ -5,6 +5,12 @@ export type ObjectEditorTab = 'code' | 'costumes' | 'sounds';
 // Callback type for object picker
 export type ObjectPickerCallback = (objectId: string) => void;
 
+// Undo/Redo handler type
+export type UndoRedoHandler = {
+  undo: () => void;
+  redo: () => void;
+};
+
 interface EditorStore {
   // Selection state
   selectedSceneId: string | null;
@@ -28,6 +34,10 @@ interface EditorStore {
   objectPickerCallback: ObjectPickerCallback | null;
   objectPickerExcludeId: string | null; // Object to exclude (usually current object)
 
+  // Undo/Redo handlers for different editors
+  costumeUndoHandler: UndoRedoHandler | null;
+  codeUndoHandler: UndoRedoHandler | null;
+
   // Actions
   selectScene: (sceneId: string | null) => void;
   selectObject: (objectId: string | null) => void;
@@ -46,6 +56,14 @@ interface EditorStore {
   // Object picker actions
   openObjectPicker: (callback: ObjectPickerCallback, excludeId?: string | null) => void;
   closeObjectPicker: () => void;
+
+  // Undo/Redo registration
+  registerCostumeUndo: (handler: UndoRedoHandler | null) => void;
+  registerCodeUndo: (handler: UndoRedoHandler | null) => void;
+
+  // Global undo/redo (routes to active editor)
+  undo: () => void;
+  redo: () => void;
 }
 
 export const useEditorStore = create<EditorStore>((set) => ({
@@ -70,6 +88,10 @@ export const useEditorStore = create<EditorStore>((set) => ({
   objectPickerOpen: false,
   objectPickerCallback: null,
   objectPickerExcludeId: null,
+
+  // Undo/Redo handlers
+  costumeUndoHandler: null,
+  codeUndoHandler: null,
 
   // Actions
   selectScene: (sceneId) => {
@@ -126,5 +148,31 @@ export const useEditorStore = create<EditorStore>((set) => ({
       objectPickerCallback: null,
       objectPickerExcludeId: null,
     });
+  },
+
+  registerCostumeUndo: (handler) => {
+    set({ costumeUndoHandler: handler });
+  },
+
+  registerCodeUndo: (handler) => {
+    set({ codeUndoHandler: handler });
+  },
+
+  undo: () => {
+    const state = useEditorStore.getState();
+    if (state.activeObjectTab === 'costumes' && state.costumeUndoHandler) {
+      state.costumeUndoHandler.undo();
+    } else if (state.activeObjectTab === 'code' && state.codeUndoHandler) {
+      state.codeUndoHandler.undo();
+    }
+  },
+
+  redo: () => {
+    const state = useEditorStore.getState();
+    if (state.activeObjectTab === 'costumes' && state.costumeUndoHandler) {
+      state.costumeUndoHandler.redo();
+    } else if (state.activeObjectTab === 'code' && state.codeUndoHandler) {
+      state.codeUndoHandler.redo();
+    }
   },
 }));

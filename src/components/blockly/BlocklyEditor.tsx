@@ -4,6 +4,7 @@ import { registerContinuousToolbox } from '@blockly/continuous-toolbox';
 import { useProjectStore } from '@/store/projectStore';
 import { useEditorStore } from '@/store/editorStore';
 import { getToolboxConfig } from './toolbox';
+import type { UndoRedoHandler } from '@/store/editorStore';
 
 // Register continuous toolbox plugin once at module load
 registerContinuousToolbox();
@@ -15,7 +16,17 @@ export function BlocklyEditor() {
   const currentObjectIdRef = useRef<string | null>(null);
   const isLoadingRef = useRef(false);
 
-  const { selectedSceneId, selectedObjectId } = useEditorStore();
+  const { selectedSceneId, selectedObjectId, registerCodeUndo } = useEditorStore();
+
+  // Register undo/redo handler for keyboard shortcuts
+  useEffect(() => {
+    const handler: UndoRedoHandler = {
+      undo: () => workspaceRef.current?.undo(false),
+      redo: () => workspaceRef.current?.undo(true),
+    };
+    registerCodeUndo(handler);
+    return () => registerCodeUndo(null);
+  }, [registerCodeUndo]);
 
   // Keep refs in sync
   useEffect(() => {

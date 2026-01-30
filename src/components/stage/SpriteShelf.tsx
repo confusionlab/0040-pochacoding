@@ -38,7 +38,7 @@ interface SortableObjectItemProps {
   isSelected: boolean;
   isEditing: boolean;
   isComponentInstance: boolean;
-  effectiveCostumes: { assetId: string }[];
+  effectiveCostumes: { assetId: string; bounds?: { x: number; y: number; width: number; height: number } }[];
   effectiveCostumeIndex: number;
   editName: string;
   inputRef: React.RefObject<HTMLInputElement | null>;
@@ -102,15 +102,41 @@ function SortableObjectItem({
           : 'hover:bg-accent border-l-2 border-l-transparent'
       }`}
     >
-      {/* Thumbnail */}
-      <div className="w-8 h-8 rounded flex items-center justify-center overflow-hidden shrink-0 bg-muted">
-        {effectiveCostumes && effectiveCostumes.length > 0 ? (
-          <img
-            src={effectiveCostumes[effectiveCostumeIndex]?.assetId}
-            alt={object.name}
-            className="w-full h-full object-contain"
-          />
-        ) : (
+      {/* Thumbnail - zoomed to bounds */}
+      <div className="w-8 h-8 rounded flex items-center justify-center overflow-hidden shrink-0 bg-muted relative">
+        {effectiveCostumes && effectiveCostumes.length > 0 ? (() => {
+          const costume = effectiveCostumes[effectiveCostumeIndex];
+          const bounds = costume?.bounds;
+          if (bounds && bounds.width > 0 && bounds.height > 0) {
+            const scale = Math.min(1, 32 / Math.max(bounds.width, bounds.height));
+            return (
+              <div
+                className="absolute"
+                style={{
+                  backgroundImage: `url(${costume.assetId})`,
+                  backgroundPosition: `${-bounds.x}px ${-bounds.y}px`,
+                  backgroundSize: '1024px 1024px',
+                  backgroundRepeat: 'no-repeat',
+                  transform: `scale(${scale})`,
+                  transformOrigin: 'top left',
+                  width: bounds.width,
+                  height: bounds.height,
+                  left: '50%',
+                  top: '50%',
+                  marginLeft: -bounds.width * scale / 2,
+                  marginTop: -bounds.height * scale / 2,
+                }}
+              />
+            );
+          }
+          return (
+            <img
+              src={costume?.assetId}
+              alt={object.name}
+              className="w-full h-full object-contain"
+            />
+          );
+        })() : (
           <span className="text-sm">📦</span>
         )}
       </div>

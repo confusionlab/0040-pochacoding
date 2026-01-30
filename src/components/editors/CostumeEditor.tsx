@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { useProjectStore } from '@/store/projectStore';
-import { useEditorStore } from '@/store/editorStore';
+import { useEditorStore, type UndoRedoHandler } from '@/store/editorStore';
 import { CostumeList } from './costume/CostumeList';
 import { CostumeCanvas, type CostumeCanvasHandle } from './costume/CostumeCanvas';
 import { CostumeToolbar, type DrawingTool } from './costume/CostumeToolbar';
@@ -10,7 +10,17 @@ import type { Costume, ColliderConfig } from '@/types';
 export function CostumeEditor() {
   const canvasRef = useRef<CostumeCanvasHandle>(null);
   const { project, updateObject } = useProjectStore();
-  const { selectedSceneId, selectedObjectId } = useEditorStore();
+  const { selectedSceneId, selectedObjectId, registerCostumeUndo } = useEditorStore();
+
+  // Register undo/redo handler for keyboard shortcuts
+  useEffect(() => {
+    const handler: UndoRedoHandler = {
+      undo: () => canvasRef.current?.undo(),
+      redo: () => canvasRef.current?.redo(),
+    };
+    registerCostumeUndo(handler);
+    return () => registerCostumeUndo(null);
+  }, [registerCostumeUndo]);
 
   // Tool state
   const [activeTool, setActiveTool] = useState<DrawingTool>('brush');
