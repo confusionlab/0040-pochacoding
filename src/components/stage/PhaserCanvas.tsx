@@ -687,6 +687,7 @@ function createPlayScene(
     // Apply physics configuration (use effective physics for component instances)
     const physics = effectiveProps.physics;
     const collider = effectiveProps.collider;
+    console.log(`[Physics] Object "${obj.name}" physics config:`, physics);
     console.log(`[Physics] Object "${obj.name}" collider:`, collider);
     if (physics?.enabled) {
       // Get default size from costume bounds
@@ -812,7 +813,9 @@ function createPlayScene(
 
       // Gravity scale - uses Matter.js built-in gravityScale property
       // Default of 1 means normal gravity, 0 means no gravity, 2 means double, etc.
-      body.gravityScale = { x: 0, y: physics.gravityY ?? 1 };
+      const gravityValue = physics.gravityY ?? 1;
+      body.gravityScale = { x: 0, y: gravityValue };
+      console.log(`[Physics] Object "${obj.name}" gravity scale set to: ${gravityValue}`);
     }
 
     // Generate and execute code for this object (use effective blocklyXml)

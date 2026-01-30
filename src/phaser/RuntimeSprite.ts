@@ -344,6 +344,13 @@ export class RuntimeSprite {
 
   enablePhysics(): void {
     if (this._stopped) return;
+
+    // Check if Matter physics is available
+    if (!this.scene?.matter?.add) {
+      debugLog('error', `${this.name}.enablePhysics() failed: Matter physics not available on scene`);
+      return;
+    }
+
     if (!this.getMatterBody()) {
       // Get size from costume bounds or default
       let width = 64, height = 64;
@@ -355,31 +362,38 @@ export class RuntimeSprite {
 
       debugLog('action', `${this.name}.enablePhysics() creating body ${width}x${height} at (${this.container.x}, ${this.container.y})`);
 
-      // Create body the same way PhaserCanvas does - create separately then attach
-      // This is necessary because scene.matter.add.gameObject() doesn't work well with Containers
-      const body = this.scene.matter.add.rectangle(
-        this.container.x,
-        this.container.y,
-        width,
-        height,
-        {
-          restitution: 0,
-          frictionAir: 0.01,
-          friction: 0.1,
-        }
-      );
+      try {
+        // Create body the same way PhaserCanvas does - create separately then attach
+        // This is necessary because scene.matter.add.gameObject() doesn't work well with Containers
+        const body = this.scene.matter.add.rectangle(
+          this.container.x,
+          this.container.y,
+          width,
+          height,
+          {
+            restitution: 0,
+            frictionAir: 0.01,
+            friction: 0.1,
+          }
+        );
 
-      // Attach body to container manually
-      (this.container as unknown as { body: MatterJS.BodyType }).body = body;
+        // Attach body to container manually
+        (this.container as unknown as { body: MatterJS.BodyType }).body = body;
 
-      // Set up position syncing from body to container
-      this.scene.matter.world.on('afterupdate', () => {
-        if (body && this.container.active) {
-          this.container.setPosition(body.position.x, body.position.y);
-        }
-      });
+        // Store reference for cleanup
+        const container = this.container;
 
-      debugLog('info', `${this.name}.enablePhysics() body created: ${!!this.getMatterBody()}`);
+        // Set up position syncing from body to container
+        this.scene.matter.world.on('afterupdate', () => {
+          if (body && container.active) {
+            container.setPosition(body.position.x, body.position.y);
+          }
+        });
+
+        debugLog('info', `${this.name}.enablePhysics() body created successfully`);
+      } catch (e) {
+        debugLog('error', `${this.name}.enablePhysics() failed: ${e}`);
+      }
     } else {
       debugLog('info', `${this.name}.enablePhysics() body already exists`);
     }
@@ -388,35 +402,41 @@ export class RuntimeSprite {
   setVelocity(vx: number, vy: number): void {
     if (this._stopped) return;
     const body = this.getMatterBody();
-    if (body) {
+    if (body && this.scene?.matter?.body) {
       // Invert Y for user space (positive = up)
       this.scene.matter.body.setVelocity(body, { x: vx, y: -vy });
       debugLog('action', `${this.name}.setVelocity(${vx}, ${vy}) -> body velocity: (${vx}, ${-vy})`);
-    } else {
+    } else if (!body) {
       debugLog('error', `${this.name}.setVelocity: No physics body found. Call enablePhysics() first or enable physics in object properties.`);
+    } else {
+      debugLog('error', `${this.name}.setVelocity: Matter physics not available on scene`);
     }
   }
 
   setVelocityX(vx: number): void {
     if (this._stopped) return;
     const body = this.getMatterBody();
-    if (body) {
+    if (body && this.scene?.matter?.body) {
       this.scene.matter.body.setVelocity(body, { x: vx, y: body.velocity.y });
       debugLog('action', `${this.name}.setVelocityX(${vx})`);
-    } else {
+    } else if (!body) {
       debugLog('error', `${this.name}.setVelocityX: No physics body found.`);
+    } else {
+      debugLog('error', `${this.name}.setVelocityX: Matter physics not available`);
     }
   }
 
   setVelocityY(vy: number): void {
     if (this._stopped) return;
     const body = this.getMatterBody();
-    if (body) {
+    if (body && this.scene?.matter?.body) {
       // Invert Y for user space (positive = up)
       this.scene.matter.body.setVelocity(body, { x: body.velocity.x, y: -vy });
       debugLog('action', `${this.name}.setVelocityY(${vy})`);
-    } else {
+    } else if (!body) {
       debugLog('error', `${this.name}.setVelocityY: No physics body found.`);
+    } else {
+      debugLog('error', `${this.name}.setVelocityY: Matter physics not available`);
     }
   }
 
