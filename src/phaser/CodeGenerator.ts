@@ -325,6 +325,11 @@ export function registerCodeGenerators(): void {
     return 'runtime.cloneSprite(spriteId);\n';
   };
 
+  javascriptGenerator.forBlock['control_clone_object'] = function(block) {
+    const targetId = block.getFieldValue('TARGET');
+    return `runtime.cloneSprite('${targetId}');\n`;
+  };
+
   javascriptGenerator.forBlock['control_delete_clone'] = function() {
     return 'runtime.deleteClone(spriteId);\n';
   };

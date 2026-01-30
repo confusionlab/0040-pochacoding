@@ -365,6 +365,7 @@ export function getToolboxConfig(): Blockly.utils.toolbox.ToolboxDefinition {
           { kind: 'block', type: 'control_stop' },
           { kind: 'block', type: 'control_switch_scene' },
           { kind: 'block', type: 'control_clone' },
+          { kind: 'block', type: 'control_clone_object' },
           { kind: 'block', type: 'control_delete_clone' },
           { kind: 'block', type: 'control_broadcast' },
           { kind: 'block', type: 'control_broadcast_wait' },
@@ -1332,6 +1333,21 @@ function registerCustomBlocks() {
       this.setNextStatement(true, null);
       this.setColour('#FFBF00');
       this.setTooltip('Create a clone of this object');
+    }
+  };
+
+  Blockly.Blocks['control_clone_object'] = {
+    init: function() {
+      this.appendDummyInput()
+        .appendField('clone')
+        .appendField(new Blockly.FieldDropdown(getObjectDropdownOptions), 'TARGET');
+      this.setPreviousStatement(true, null);
+      this.setNextStatement(true, null);
+      this.setColour('#FFBF00');
+      this.setTooltip('Create a clone of the selected object');
+      // Add validator for pick from stage
+      const targetField = this.getField('TARGET') as Blockly.FieldDropdown;
+      if (targetField) targetField.setValidator(createObjectPickerValidator(false));
     }
   };
 
