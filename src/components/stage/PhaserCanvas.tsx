@@ -217,11 +217,15 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
     selectedScene.objects.forEach((obj, index) => {
       let container = phaserScene.children.getByName(obj.id) as Phaser.GameObjects.Container | undefined;
 
+      // Get effective props (resolves component references)
+      const components = project?.components || [];
+      const effectiveProps = getEffectiveObjectProps(obj, components);
+
       if (!container) {
         // Create new object
         const cw = phaserScene.data.get('canvasWidth') as number || 800;
         const ch = phaserScene.data.get('canvasHeight') as number || 600;
-        container = createObjectVisual(phaserScene, obj, true, cw, ch); // true = editor mode
+        container = createObjectVisual(phaserScene, obj, true, cw, ch, components); // true = editor mode
         const isSelected = obj.id === selectedObjectId;
         container.setData('selected', isSelected);
 
@@ -255,9 +259,9 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
         container.setRotation(Phaser.Math.DegToRad(obj.rotation));
         container.setVisible(obj.visible);
 
-        // Update costume if changed
-        const costumes = obj.costumes || [];
-        const currentCostumeIndex = obj.currentCostumeIndex ?? 0;
+        // Update costume if changed (use effective props for component instances)
+        const costumes = effectiveProps.costumes || [];
+        const currentCostumeIndex = effectiveProps.currentCostumeIndex ?? 0;
         const currentCostume = costumes[currentCostumeIndex];
         const storedCostumeId = container.getData('costumeId');
 
@@ -321,7 +325,7 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
         selectionRect.setVisible(isSelected);
       }
     });
-  }, [selectedScene?.objects, selectedObjectId, isPlaying, selectObject, handleObjectDragEnd]);
+  }, [selectedScene?.objects, selectedObjectId, isPlaying, selectObject, handleObjectDragEnd, project?.components]);
 
   // Update background color when it changes (in editor mode only)
   useEffect(() => {

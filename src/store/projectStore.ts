@@ -246,7 +246,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     const duplicate: GameObject = {
       ...original,
       id: crypto.randomUUID(),
-      name: `${original.name} Copy`,
+      // Component instances keep the original name (they're instances of the same component)
+      name: original.componentId ? original.name : `${original.name} Copy`,
       x: original.x + 50,
       y: original.y + 50,
     };

@@ -31,7 +31,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { Plus, Star, Pencil, Copy, Trash2, ChevronRight, Component, Unlink } from 'lucide-react';
 import type { GameObject, ReusableObject } from '@/types';
-import { COMPONENT_COLOR, getEffectiveObjectProps } from '@/types';
+import { getEffectiveObjectProps } from '@/types';
 
 interface SortableObjectItemProps {
   object: GameObject;
@@ -103,13 +103,7 @@ function SortableObjectItem({
       }`}
     >
       {/* Thumbnail */}
-      <div
-        className="w-8 h-8 rounded flex items-center justify-center overflow-hidden shrink-0"
-        style={{
-          backgroundColor: isComponentInstance ? COMPONENT_COLOR : undefined,
-          border: isComponentInstance ? '2px solid #7c3aed' : undefined,
-        }}
-      >
+      <div className="w-8 h-8 rounded flex items-center justify-center overflow-hidden shrink-0 bg-muted">
         {effectiveCostumes && effectiveCostumes.length > 0 ? (
           <img
             src={effectiveCostumes[effectiveCostumeIndex]?.assetId}
@@ -117,7 +111,7 @@ function SortableObjectItem({
             className="w-full h-full object-contain"
           />
         ) : (
-          <span className="text-sm">{isComponentInstance ? '⬡' : '📦'}</span>
+          <span className="text-sm">📦</span>
         )}
       </div>
 

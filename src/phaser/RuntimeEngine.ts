@@ -639,9 +639,34 @@ export class RuntimeEngine {
 
   isTouching(spriteId: string, targetId: string): boolean {
     const sprite = this.sprites.get(spriteId);
-    const target = this.sprites.get(targetId);
-    if (!sprite || !target) return false;
+    if (!sprite) return false;
 
+    // Handle EDGE special case - check if touching world bounds
+    if (targetId === 'EDGE') {
+      const body = sprite.container.body as Phaser.Physics.Arcade.Body | null;
+      if (body) {
+        // Check if physics body is touching world bounds
+        return body.blocked.up || body.blocked.down || body.blocked.left || body.blocked.right;
+      }
+      // Fallback: check if sprite bounds are outside canvas
+      const bounds = sprite.container.getBounds();
+      return bounds.left <= 0 || bounds.right >= this._canvasWidth ||
+             bounds.top <= 0 || bounds.bottom >= this._canvasHeight;
+    }
+
+    const target = this.sprites.get(targetId);
+    if (!target) return false;
+
+    // Use physics body overlap if both have physics bodies
+    const bodyA = sprite.container.body as Phaser.Physics.Arcade.Body | null;
+    const bodyB = target.container.body as Phaser.Physics.Arcade.Body | null;
+
+    if (bodyA && bodyB) {
+      // Use physics-based overlap detection
+      return this.scene.physics.overlap(sprite.container, target.container);
+    }
+
+    // Fallback to bounds intersection
     const boundsA = sprite.container.getBounds();
     const boundsB = target.container.getBounds();
     return Phaser.Geom.Intersects.RectangleToRectangle(boundsA, boundsB);
@@ -649,8 +674,22 @@ export class RuntimeEngine {
 
   distanceTo(spriteId: string, targetId: string): number {
     const sprite = this.sprites.get(spriteId);
+    if (!sprite) return 0;
+
+    // Handle MOUSE special case
+    if (targetId === 'MOUSE') {
+      const mouseX = this.scene.input.activePointer.worldX;
+      const mouseY = this.scene.input.activePointer.worldY;
+      return Phaser.Math.Distance.Between(
+        sprite.container.x,
+        sprite.container.y,
+        mouseX,
+        mouseY
+      );
+    }
+
     const target = this.sprites.get(targetId);
-    if (!sprite || !target) return 0;
+    if (!target) return 0;
 
     return Phaser.Math.Distance.Between(
       sprite.container.x,

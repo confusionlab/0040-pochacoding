@@ -2,6 +2,9 @@ import { create } from 'zustand';
 
 export type ObjectEditorTab = 'code' | 'costumes' | 'sounds';
 
+// Callback type for object picker
+export type ObjectPickerCallback = (objectId: string) => void;
+
 interface EditorStore {
   // Selection state
   selectedSceneId: string | null;
@@ -20,6 +23,11 @@ interface EditorStore {
   showReusableLibrary: boolean;
   activeObjectTab: ObjectEditorTab;
 
+  // Object picker state
+  objectPickerOpen: boolean;
+  objectPickerCallback: ObjectPickerCallback | null;
+  objectPickerExcludeId: string | null; // Object to exclude (usually current object)
+
   // Actions
   selectScene: (sceneId: string | null) => void;
   selectObject: (objectId: string | null) => void;
@@ -34,6 +42,10 @@ interface EditorStore {
 
   setShowProjectDialog: (show: boolean) => void;
   setShowReusableLibrary: (show: boolean) => void;
+
+  // Object picker actions
+  openObjectPicker: (callback: ObjectPickerCallback, excludeId?: string | null) => void;
+  closeObjectPicker: () => void;
 }
 
 export const useEditorStore = create<EditorStore>((set) => ({
@@ -53,6 +65,11 @@ export const useEditorStore = create<EditorStore>((set) => ({
   showProjectDialog: false,
   showReusableLibrary: false,
   activeObjectTab: 'code' as ObjectEditorTab,
+
+  // Object picker state
+  objectPickerOpen: false,
+  objectPickerCallback: null,
+  objectPickerExcludeId: null,
 
   // Actions
   selectScene: (sceneId) => {
@@ -93,5 +110,21 @@ export const useEditorStore = create<EditorStore>((set) => ({
 
   setActiveObjectTab: (tab) => {
     set({ activeObjectTab: tab });
+  },
+
+  openObjectPicker: (callback, excludeId = null) => {
+    set({
+      objectPickerOpen: true,
+      objectPickerCallback: callback,
+      objectPickerExcludeId: excludeId,
+    });
+  },
+
+  closeObjectPicker: () => {
+    set({
+      objectPickerOpen: false,
+      objectPickerCallback: null,
+      objectPickerExcludeId: null,
+    });
   },
 }));

@@ -2,8 +2,44 @@ import * as Blockly from 'blockly';
 import { useProjectStore } from '@/store/projectStore';
 import { useEditorStore } from '@/store/editorStore';
 
+// Special value for "pick from stage" option
+const PICK_FROM_STAGE = '__PICK_FROM_STAGE__';
+
+// Store reference to the field being picked for (so callback can update it)
+let pendingPickerField: Blockly.FieldDropdown | null = null;
+
+// Helper to generate unique display names for objects
+function getUniqueDisplayNames(objects: Array<{ id: string; name: string }>, excludeId?: string): Array<[string, string]> {
+  // Count name occurrences
+  const nameCounts = new Map<string, number>();
+  const nameIndices = new Map<string, number>();
+
+  for (const obj of objects) {
+    if (obj.id === excludeId) continue;
+    nameCounts.set(obj.name, (nameCounts.get(obj.name) || 0) + 1);
+  }
+
+  // Generate unique display names
+  const result: Array<[string, string]> = [];
+  for (const obj of objects) {
+    if (obj.id === excludeId) continue;
+
+    const count = nameCounts.get(obj.name) || 0;
+    if (count > 1) {
+      // Multiple objects with same name - add index
+      const index = (nameIndices.get(obj.name) || 0) + 1;
+      nameIndices.set(obj.name, index);
+      result.push([`${obj.name} (${index})`, obj.id]);
+    } else {
+      result.push([obj.name, obj.id]);
+    }
+  }
+
+  return result;
+}
+
 // Dynamic dropdown generator for object selection (excludes current object)
-function getObjectDropdownOptions(): Array<[string, string]> {
+function getObjectDropdownOptions(includePicker: boolean = true): Array<[string, string]> {
   const project = useProjectStore.getState().project;
   const selectedSceneId = useEditorStore.getState().selectedSceneId;
   const selectedObjectId = useEditorStore.getState().selectedObjectId;
@@ -17,20 +53,23 @@ function getObjectDropdownOptions(): Array<[string, string]> {
     return [['(no objects)', '']];
   }
 
-  // Return all objects except the currently selected one (can't touch yourself)
-  const options: Array<[string, string]> = scene.objects
-    .filter(obj => obj.id !== selectedObjectId)
-    .map(obj => [obj.name, obj.name]);
+  // Return all objects except the currently selected one with unique display names
+  const options = getUniqueDisplayNames(scene.objects, selectedObjectId);
 
   if (options.length === 0) {
     return [['(no other objects)', '']];
+  }
+
+  // Add "pick from stage" option at the end
+  if (includePicker && options.length > 0) {
+    options.push(['🎯 pick from stage...', PICK_FROM_STAGE]);
   }
 
   return options;
 }
 
 // All objects including current (for camera follow etc.)
-function getAllObjectsDropdownOptions(): Array<[string, string]> {
+function getAllObjectsDropdownOptions(includePicker: boolean = true): Array<[string, string]> {
   const project = useProjectStore.getState().project;
   const selectedSceneId = useEditorStore.getState().selectedSceneId;
 
@@ -43,7 +82,15 @@ function getAllObjectsDropdownOptions(): Array<[string, string]> {
     return [['(no objects)', '']];
   }
 
-  return scene.objects.map(obj => [obj.name, obj.name]);
+  // Generate unique display names for all objects
+  const options = getUniqueDisplayNames(scene.objects);
+
+  // Add "pick from stage" option at the end
+  if (includePicker && options.length > 0) {
+    options.push(['🎯 pick from stage...', PICK_FROM_STAGE]);
+  }
+
+  return options;
 }
 
 // Dropdown with special options + objects
@@ -57,7 +104,7 @@ function getTargetDropdownOptions(includeEdge: boolean = false, includeMouse: bo
       specialOptions.push(['mouse', 'MOUSE']);
     }
 
-    const objectOptions = getObjectDropdownOptions();
+    const objectOptions = getObjectDropdownOptions(true);
 
     // If no real objects, just return special options + placeholder
     if (objectOptions.length === 1 && objectOptions[0][1] === '') {
@@ -65,6 +112,34 @@ function getTargetDropdownOptions(includeEdge: boolean = false, includeMouse: bo
     }
 
     return [...specialOptions, ...objectOptions];
+  };
+}
+
+// Validator for object picker dropdowns
+function createObjectPickerValidator(excludeCurrentObject: boolean = true) {
+  return function(this: Blockly.FieldDropdown, newValue: string): string | null {
+    if (newValue === PICK_FROM_STAGE) {
+      // Store reference to this field
+      pendingPickerField = this;
+
+      // Get exclude ID
+      const excludeId = excludeCurrentObject
+        ? useEditorStore.getState().selectedObjectId
+        : null;
+
+      // Open picker with callback
+      useEditorStore.getState().openObjectPicker((pickedObjectId: string) => {
+        if (pendingPickerField) {
+          // Update the field value
+          pendingPickerField.setValue(pickedObjectId);
+          pendingPickerField = null;
+        }
+      }, excludeId);
+
+      // Return null to prevent the field from changing to PICK_FROM_STAGE
+      return null;
+    }
+    return newValue;
   };
 }
 
@@ -777,6 +852,9 @@ function registerCustomBlocks() {
       this.setOutput(true, 'Boolean');
       this.setColour('#5CB1D6');
       this.setTooltip('Is this touching something?');
+      // Add validator for pick from stage
+      const targetField = this.getField('TARGET') as Blockly.FieldDropdown;
+      if (targetField) targetField.setValidator(createObjectPickerValidator(true));
     }
   };
 
@@ -798,6 +876,9 @@ function registerCustomBlocks() {
       this.setOutput(true, 'Number');
       this.setColour('#5CB1D6');
       this.setTooltip('Distance to target');
+      // Add validator for pick from stage
+      const targetField = this.getField('TARGET') as Blockly.FieldDropdown;
+      if (targetField) targetField.setValidator(createObjectPickerValidator(true));
     }
   };
 
@@ -972,6 +1053,9 @@ function registerCustomBlocks() {
       this.setNextStatement(true, null);
       this.setColour('#0fBDA8');
       this.setTooltip('Camera follows an object');
+      // Add validator for pick from stage (don't exclude current object)
+      const targetField = this.getField('TARGET') as Blockly.FieldDropdown;
+      if (targetField) targetField.setValidator(createObjectPickerValidator(false));
     }
   };
 
@@ -1180,6 +1264,9 @@ function registerCustomBlocks() {
         .setCheck(null);
       this.setColour('#FFAB19');
       this.setTooltip('Runs when touching target');
+      // Add validator for pick from stage
+      const targetField = this.getField('TARGET') as Blockly.FieldDropdown;
+      if (targetField) targetField.setValidator(createObjectPickerValidator(true));
     }
   };
 
@@ -1262,6 +1349,9 @@ function registerCustomBlocks() {
       this.setNextStatement(true, null);
       this.setColour('#4C97FF');
       this.setTooltip('Point towards target');
+      // Add validator for pick from stage
+      const targetField = this.getField('TARGET') as Blockly.FieldDropdown;
+      if (targetField) targetField.setValidator(createObjectPickerValidator(true));
     }
   };
 

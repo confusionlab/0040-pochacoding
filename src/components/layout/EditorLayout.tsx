@@ -4,6 +4,7 @@ import { Toolbar } from './Toolbar';
 import { ObjectEditor } from '../editors/ObjectEditor';
 import { StagePanel } from '../stage/StagePanel';
 import { PhaserCanvas } from '../stage/PhaserCanvas';
+import { ObjectPicker } from '../stage/ObjectPicker';
 import { ProjectDialog } from '../dialogs/ProjectDialog';
 import { useProjectStore } from '@/store/projectStore';
 import { useEditorStore } from '@/store/editorStore';
@@ -258,6 +259,9 @@ export function EditorLayout() {
           onProjectOpen={handleProjectOpen}
         />
       )}
+
+      {/* Object picker overlay */}
+      <ObjectPicker />
     </div>
   );
 }
