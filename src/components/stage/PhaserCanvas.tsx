@@ -773,6 +773,15 @@ function createPlayScene(
       if (existingBody) {
         scene.matter.world.remove(existingBody);
       }
+
+      // Add a destroy method to the body so Phaser can clean it up properly
+      // Raw Matter.js bodies don't have destroy(), which causes errors when container is destroyed
+      (body as MatterJS.BodyType & { destroy?: () => void }).destroy = () => {
+        if (scene.matter?.world) {
+          scene.matter.world.remove(body);
+        }
+      };
+
       (container as unknown as { body: MatterJS.BodyType }).body = body;
 
       // Store collider offset for position sync

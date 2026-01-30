@@ -377,6 +377,14 @@ export class RuntimeSprite {
           }
         );
 
+        // Add a destroy method to the body so Phaser can clean it up properly
+        // Raw Matter.js bodies don't have destroy(), which causes errors when container is destroyed
+        (body as MatterJS.BodyType & { destroy?: () => void }).destroy = () => {
+          if (this.scene?.matter?.world) {
+            this.scene.matter.world.remove(body);
+          }
+        };
+
         // Attach body to container manually
         (this.container as unknown as { body: MatterJS.BodyType }).body = body;
 
@@ -587,6 +595,17 @@ export class RuntimeSprite {
 
   destroy(): void {
     this._stopped = true;
+
+    // Remove Matter.js body from world before destroying container
+    // This prevents the "body.destroy is not a function" error
+    const body = this.getMatterBody();
+    if (body && this.scene?.matter?.world) {
+      this.scene.matter.world.remove(body);
+    }
+
+    // Clear the body reference to prevent Phaser from trying to destroy it
+    (this.container as unknown as { body?: MatterJS.BodyType }).body = undefined;
+
     this.container.destroy();
   }
 }
