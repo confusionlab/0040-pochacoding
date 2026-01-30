@@ -649,11 +649,24 @@ export class RuntimeEngine {
   // --- Clone System ---
 
   cloneSprite(spriteId: string): RuntimeSprite | null {
-    const original = this.sprites.get(spriteId);
-    if (!original) return null;
+    let sourceSprite = this.sprites.get(spriteId);
+    if (!sourceSprite) return null;
+
+    // If the source is itself a clone, find the original (root) object
+    // This ensures all clones come from the original template, not from other clones
+    let originalId = spriteId;
+    while (sourceSprite.isClone && sourceSprite.cloneParentId) {
+      originalId = sourceSprite.cloneParentId;
+      const parent = this.sprites.get(originalId);
+      if (!parent) break;
+      sourceSprite = parent;
+    }
+
+    // Now sourceSprite is the original (non-clone) object
+    const original = sourceSprite;
 
     this.cloneCounter++;
-    const cloneId = `${spriteId}_clone_${this.cloneCounter}`;
+    const cloneId = `${originalId}_clone_${this.cloneCounter}`;
 
     // Create a placeholder graphics (will be replaced by costume if available)
     const graphics = this.scene.add.graphics();
@@ -676,7 +689,7 @@ export class RuntimeEngine {
     // Register the clone
     const clone = this.registerSprite(cloneId, `${original.name} (clone)`, container, original.componentId);
     clone.isClone = true;
-    clone.cloneParentId = spriteId;
+    clone.cloneParentId = originalId; // Always point to the original, not intermediate clones
 
     // Copy all state from original (costumes, direction, size, configs, etc.)
     clone.copyStateFrom(original);
@@ -702,8 +715,8 @@ export class RuntimeEngine {
     // If we copied handlers, the closures would still reference the original spriteId,
     // which would cause incorrect behavior and potential infinite loops.
 
-    // Execute onCloneStart handlers for this new clone
-    const originalHandlers = this.handlers.get(spriteId);
+    // Execute onCloneStart handlers from the original object
+    const originalHandlers = this.handlers.get(originalId);
     if (originalHandlers) {
       for (const handler of originalHandlers.onCloneStart) {
         try {
