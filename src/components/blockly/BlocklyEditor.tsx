@@ -1,10 +1,12 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as Blockly from 'blockly';
 import { registerContinuousToolbox } from '@blockly/continuous-toolbox';
 import { useProjectStore } from '@/store/projectStore';
 import { useEditorStore } from '@/store/editorStore';
-import { getToolboxConfig } from './toolbox';
+import { getToolboxConfig, registerTypedVariablesCategory, setAddVariableCallback } from './toolbox';
+import { AddVariableDialog } from '@/components/dialogs/AddVariableDialog';
 import type { UndoRedoHandler } from '@/store/editorStore';
+import type { Variable } from '@/types';
 
 // Register continuous toolbox plugin once at module load
 registerContinuousToolbox();
@@ -15,8 +17,10 @@ export function BlocklyEditor() {
   const currentSceneIdRef = useRef<string | null>(null);
   const currentObjectIdRef = useRef<string | null>(null);
   const isLoadingRef = useRef(false);
+  const [showAddVariableDialog, setShowAddVariableDialog] = useState(false);
 
   const { selectedSceneId, selectedObjectId, registerCodeUndo } = useEditorStore();
+  const { project, addGlobalVariable, addLocalVariable } = useProjectStore();
 
   // Register undo/redo handler for keyboard shortcuts
   useEffect(() => {
@@ -64,6 +68,12 @@ export function BlocklyEditor() {
         wheel: true,
       },
     });
+
+    // Register typed variables category callback
+    registerTypedVariablesCategory(workspaceRef.current);
+
+    // Set up callback for "Add Variable" button
+    setAddVariableCallback(() => setShowAddVariableDialog(true));
 
     // Save on changes
     workspaceRef.current.addChangeListener((event) => {
@@ -147,7 +157,34 @@ export function BlocklyEditor() {
     }, 50);
   }, [selectedObjectId, selectedSceneId]);
 
+  // Get current object name for local variable option
+  const currentObjectName = (() => {
+    if (!project || !selectedSceneId || !selectedObjectId) return undefined;
+    const scene = project.scenes.find(s => s.id === selectedSceneId);
+    return scene?.objects.find(o => o.id === selectedObjectId)?.name;
+  })();
+
+  const handleAddVariable = (variable: Variable) => {
+    if (variable.scope === 'global') {
+      addGlobalVariable(variable);
+    } else if (selectedSceneId && selectedObjectId) {
+      addLocalVariable(selectedSceneId, selectedObjectId, variable);
+    }
+    // Refresh the toolbox to show the new variable
+    if (workspaceRef.current) {
+      workspaceRef.current.refreshToolboxSelection();
+    }
+  };
+
   return (
-    <div ref={containerRef} className="h-full w-full" />
+    <>
+      <div ref={containerRef} className="h-full w-full" />
+      <AddVariableDialog
+        open={showAddVariableDialog}
+        onOpenChange={setShowAddVariableDialog}
+        onAdd={handleAddVariable}
+        objectName={currentObjectName}
+      />
+    </>
   );
 }

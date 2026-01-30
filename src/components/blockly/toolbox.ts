@@ -1,6 +1,7 @@
 import * as Blockly from 'blockly';
 import { useProjectStore } from '@/store/projectStore';
 import { useEditorStore } from '@/store/editorStore';
+import type { Variable, VariableType } from '@/types';
 
 // Special value for "pick from stage" option
 const PICK_FROM_STAGE = '__PICK_FROM_STAGE__';
@@ -157,7 +158,8 @@ function createObjectPickerValidator(excludeCurrentObject: boolean = true) {
 // Register custom blocks
 registerCustomBlocks();
 
-export function getToolboxConfig(): Blockly.utils.toolbox.ToolboxDefinition {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function getToolboxConfig(): any {
   return {
     kind: 'categoryToolbox',
     contents: [
@@ -501,21 +503,27 @@ export function getToolboxConfig(): Blockly.utils.toolbox.ToolboxDefinition {
         name: 'Variables',
         colour: '#FF8C1A',
         contents: [
-          { kind: 'block', type: 'variables_get' },
           {
-            kind: 'block',
-            type: 'variables_set',
-            inputs: {
-              VALUE: { shadow: { type: 'math_number', fields: { NUM: '0' } } }
-            }
+            kind: 'button',
+            text: '+ Add Variable',
+            callbackKey: 'ADD_VARIABLE',
           },
+          { kind: 'sep', gap: '16' },
+          { kind: 'label', text: 'Get Variable' },
+          { kind: 'block', type: 'typed_variable_get' },
+          { kind: 'sep', gap: '8' },
+          { kind: 'label', text: 'Set Variable' },
+          { kind: 'block', type: 'typed_variable_set' },
           {
             kind: 'block',
-            type: 'math_change',
+            type: 'typed_variable_change',
             inputs: {
               DELTA: { shadow: { type: 'math_number', fields: { NUM: '1' } } }
             }
           },
+          { kind: 'sep', gap: '8' },
+          { kind: 'label', text: 'Boolean Value' },
+          { kind: 'block', type: 'logic_boolean' },
         ],
       },
     ],
@@ -1463,4 +1471,250 @@ function registerCustomBlocks() {
       this.setTooltip('A text string');
     }
   };
+
+  // === Typed Variable Blocks ===
+
+  // Typed variable getter - shape depends on type (diamond for boolean, round for others)
+  Blockly.Blocks['typed_variable_get'] = {
+    init: function() {
+      this.appendDummyInput()
+        .appendField(new Blockly.FieldDropdown(() => getVariableDropdownOptions()), 'VAR');
+      this.setOutput(true, 'Number'); // Default to number, will be updated by onchange
+      this.setColour('#FF8C1A');
+      this.setTooltip('Get the value of a variable');
+    },
+    onchange: function(event: Blockly.Events.Abstract) {
+      if (event.type === Blockly.Events.BLOCK_CHANGE ||
+          event.type === Blockly.Events.BLOCK_CREATE ||
+          event.type === Blockly.Events.BLOCK_MOVE) {
+        updateVariableBlockAppearance(this);
+      }
+    }
+  };
+
+  // Typed variable setter
+  Blockly.Blocks['typed_variable_set'] = {
+    init: function() {
+      this.appendValueInput('VALUE')
+        .appendField('set')
+        .appendField(new Blockly.FieldDropdown(() => getVariableDropdownOptions()), 'VAR')
+        .appendField('to');
+      this.setPreviousStatement(true, null);
+      this.setNextStatement(true, null);
+      this.setColour('#FF8C1A');
+      this.setTooltip('Set the value of a variable');
+    },
+    onchange: function(event: Blockly.Events.Abstract) {
+      if (event.type === Blockly.Events.BLOCK_CHANGE ||
+          event.type === Blockly.Events.BLOCK_CREATE ||
+          event.type === Blockly.Events.BLOCK_MOVE) {
+        validateVariableType(this);
+      }
+    }
+  };
+
+  // Typed variable change (for numeric types only)
+  Blockly.Blocks['typed_variable_change'] = {
+    init: function() {
+      this.appendValueInput('DELTA')
+        .appendField('change')
+        .appendField(new Blockly.FieldDropdown(() => getNumericVariableDropdownOptions()), 'VAR')
+        .appendField('by');
+      this.setPreviousStatement(true, null);
+      this.setNextStatement(true, null);
+      this.setColour('#FF8C1A');
+      this.setTooltip('Change a numeric variable by an amount');
+    },
+    onchange: function(event: Blockly.Events.Abstract) {
+      if (event.type === Blockly.Events.BLOCK_CHANGE ||
+          event.type === Blockly.Events.BLOCK_CREATE ||
+          event.type === Blockly.Events.BLOCK_MOVE) {
+        validateNumericInput(this);
+      }
+    }
+  };
+
+  // Boolean literal block (for boolean variables)
+  // Zelos renderer automatically uses hexagonal shape for Boolean output type
+  Blockly.Blocks['logic_boolean'] = {
+    init: function() {
+      this.appendDummyInput()
+        .appendField(new Blockly.FieldDropdown([
+          ['true', 'TRUE'],
+          ['false', 'FALSE']
+        ]), 'BOOL');
+      this.setOutput(true, 'Boolean'); // Zelos renders Boolean as hexagonal/diamond
+      this.setColour('#59C059');
+      this.setTooltip('A boolean value (true or false)');
+    }
+  };
+}
+
+// === Variable Helper Functions ===
+
+// Get all available variables (global + local for current object)
+function getAllVariables(): Variable[] {
+  const project = useProjectStore.getState().project;
+  const selectedSceneId = useEditorStore.getState().selectedSceneId;
+  const selectedObjectId = useEditorStore.getState().selectedObjectId;
+
+  if (!project) return [];
+
+  const variables: Variable[] = [...project.globalVariables];
+
+  // Add local variables from current object
+  if (selectedSceneId && selectedObjectId) {
+    const scene = project.scenes.find(s => s.id === selectedSceneId);
+    const obj = scene?.objects.find(o => o.id === selectedObjectId);
+    if (obj?.localVariables) {
+      variables.push(...obj.localVariables);
+    }
+  }
+
+  return variables;
+}
+
+// Get dropdown options for all variables
+function getVariableDropdownOptions(): Array<[string, string]> {
+  const variables = getAllVariables();
+  if (variables.length === 0) {
+    return [['(no variables)', '']];
+  }
+
+  return variables.map(v => {
+    const scopePrefix = v.scope === 'local' ? '(local) ' : '';
+    const typeIcon = getTypeIcon(v.type);
+    return [`${scopePrefix}${typeIcon} ${v.name}`, v.id];
+  });
+}
+
+// Get dropdown options for numeric variables only
+function getNumericVariableDropdownOptions(): Array<[string, string]> {
+  const variables = getAllVariables().filter(v => v.type === 'integer' || v.type === 'float');
+  if (variables.length === 0) {
+    return [['(no numeric variables)', '']];
+  }
+
+  return variables.map(v => {
+    const scopePrefix = v.scope === 'local' ? '(local) ' : '';
+    const typeIcon = getTypeIcon(v.type);
+    return [`${scopePrefix}${typeIcon} ${v.name}`, v.id];
+  });
+}
+
+// Get icon for variable type
+function getTypeIcon(type: VariableType): string {
+  switch (type) {
+    case 'string': return '📝';
+    case 'integer': return '#';
+    case 'float': return '#.#';
+    case 'boolean': return '◇';
+  }
+}
+
+// Get variable by ID
+function getVariableById(varId: string): Variable | undefined {
+  return getAllVariables().find(v => v.id === varId);
+}
+
+// Update variable getter block appearance based on type
+// Zelos renderer automatically determines shape from output type:
+// - Boolean = hexagonal (diamond)
+// - Number/String = round
+function updateVariableBlockAppearance(block: Blockly.Block) {
+  const varId = block.getFieldValue('VAR');
+  const variable = getVariableById(varId);
+
+  if (variable?.type === 'boolean') {
+    block.setOutput(true, 'Boolean'); // Zelos renders as diamond
+  } else if (variable?.type === 'string') {
+    block.setOutput(true, 'String');
+  } else {
+    block.setOutput(true, 'Number'); // integer and float
+  }
+}
+
+// Validate type for variable set block
+function validateVariableType(block: Blockly.Block) {
+  const varId = block.getFieldValue('VAR');
+  const variable = getVariableById(varId);
+  if (!variable) return;
+
+  const valueBlock = block.getInputTargetBlock('VALUE');
+  if (!valueBlock) return;
+
+  const isTypeValid = checkTypeCompatibility(variable.type, valueBlock);
+
+  // Visual feedback for type errors
+  if (!isTypeValid) {
+    block.setWarningText(`Type mismatch: expected ${variable.type}`);
+    block.setColour('#CC0000'); // Red for error
+  } else {
+    block.setWarningText(null);
+    block.setColour('#FF8C1A'); // Normal color
+  }
+}
+
+// Validate numeric input for change block
+function validateNumericInput(block: Blockly.Block) {
+  const valueBlock = block.getInputTargetBlock('DELTA');
+  if (!valueBlock) return;
+
+  const outputType = valueBlock.outputConnection?.getCheck();
+  const isNumeric = !outputType || outputType.includes('Number') ||
+                    valueBlock.type === 'math_number' ||
+                    valueBlock.type === 'typed_variable_get';
+
+  if (!isNumeric) {
+    block.setWarningText('Expected a number');
+    block.setColour('#CC0000');
+  } else {
+    block.setWarningText(null);
+    block.setColour('#FF8C1A');
+  }
+}
+
+// Check if a block's output is compatible with expected type
+function checkTypeCompatibility(expectedType: VariableType, valueBlock: Blockly.Block): boolean {
+  const blockType = valueBlock.type;
+
+  switch (expectedType) {
+    case 'string':
+      return blockType === 'text' ||
+             (blockType === 'typed_variable_get' && getVariableById(valueBlock.getFieldValue('VAR'))?.type === 'string');
+    case 'integer':
+    case 'float':
+      return blockType === 'math_number' ||
+             blockType === 'math_arithmetic' ||
+             blockType === 'math_random_int' ||
+             (blockType === 'typed_variable_get' && ['integer', 'float'].includes(getVariableById(valueBlock.getFieldValue('VAR'))?.type || ''));
+    case 'boolean':
+      return blockType === 'logic_boolean' ||
+             blockType === 'logic_compare' ||
+             blockType === 'logic_operation' ||
+             blockType === 'logic_negate' ||
+             blockType === 'sensing_key_pressed' ||
+             blockType === 'sensing_mouse_down' ||
+             blockType === 'sensing_touching' ||
+             blockType === 'sensing_touching_ground' ||
+             (blockType === 'typed_variable_get' && getVariableById(valueBlock.getFieldValue('VAR'))?.type === 'boolean');
+  }
+  return true; // Allow if we can't determine
+}
+
+// Callback for "Add Variable" button - set externally by BlocklyEditor
+let addVariableCallback: (() => void) | null = null;
+
+export function setAddVariableCallback(callback: (() => void) | null) {
+  addVariableCallback = callback;
+}
+
+// Register button callbacks for the Variables category
+export function registerTypedVariablesCategory(workspace: Blockly.WorkspaceSvg) {
+  // Register the "Add Variable" button callback
+  workspace.registerButtonCallback('ADD_VARIABLE', () => {
+    if (addVariableCallback) {
+      addVariableCallback();
+    }
+  });
 }

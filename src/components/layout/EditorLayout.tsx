@@ -9,6 +9,7 @@ import { ProjectDialog } from '../dialogs/ProjectDialog';
 import { useProjectStore } from '@/store/projectStore';
 import { useEditorStore } from '@/store/editorStore';
 import { loadProject } from '@/db/database';
+import { useCloudSync } from '@/hooks/useCloudSync';
 import { Button } from '@/components/ui/button';
 import { X } from 'lucide-react';
 
@@ -25,6 +26,11 @@ export function EditorLayout() {
   const [fullscreenPanel, setFullscreenPanel] = useState<FullscreenPanel>(null);
   const [isLoading, setIsLoading] = useState(false);
   const hoveredPanelRef = useRef<HoveredPanel>(null);
+
+  // Cloud sync - sync current project when leaving
+  const { syncProjectToCloud, syncAllToCloud } = useCloudSync({
+    currentProjectId: project?.id ?? null,
+  });
 
   // Keep ref in sync for use in event handler
   useEffect(() => {

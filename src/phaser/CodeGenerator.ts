@@ -336,7 +336,10 @@ export function registerCodeGenerators(): void {
 
   javascriptGenerator.forBlock['event_when_clone_start'] = function(block) {
     const nextCode = javascriptGenerator.statementToCode(block, 'NEXT');
-    return `runtime.onCloneStart(spriteId, async function() {\n${nextCode}});\n`;
+    // The handler receives the clone sprite as a parameter, and we shadow both 'sprite' and
+    // 'spriteId' so all blocks inside operate on the clone, not the original.
+    // This ensures blocks like isTouching, distanceTo, deleteClone, variables, etc. work correctly.
+    return `runtime.onCloneStart(spriteId, async function(cloneSprite) {\n  const sprite = cloneSprite;\n  const spriteId = cloneSprite.id;\n${nextCode}});\n`;
   };
 
   // --- Scene Switching ---
@@ -391,6 +394,32 @@ export function registerCodeGenerators(): void {
     const varName = javascriptGenerator.getVariableName(block.getFieldValue('VAR'));
     const delta = javascriptGenerator.valueToCode(block, 'DELTA', Order.ASSIGNMENT) || '1';
     return `runtime.changeVariable('${varName}', ${delta}, spriteId);\n`;
+  };
+
+  // --- Typed Variable generators ---
+
+  javascriptGenerator.forBlock['typed_variable_get'] = function(block) {
+    const varId = block.getFieldValue('VAR');
+    // Use variable ID to get value - runtime will resolve name from store
+    return [`runtime.getTypedVariable('${varId}', spriteId)`, Order.ATOMIC];
+  };
+
+  javascriptGenerator.forBlock['typed_variable_set'] = function(block) {
+    const varId = block.getFieldValue('VAR');
+    const value = javascriptGenerator.valueToCode(block, 'VALUE', Order.ASSIGNMENT) || '0';
+    return `runtime.setTypedVariable('${varId}', ${value}, spriteId);\n`;
+  };
+
+  javascriptGenerator.forBlock['typed_variable_change'] = function(block) {
+    const varId = block.getFieldValue('VAR');
+    const delta = javascriptGenerator.valueToCode(block, 'DELTA', Order.ASSIGNMENT) || '1';
+    return `runtime.changeTypedVariable('${varId}', ${delta}, spriteId);\n`;
+  };
+
+  // Boolean literal
+  javascriptGenerator.forBlock['logic_boolean'] = function(block) {
+    const value = block.getFieldValue('BOOL') === 'TRUE';
+    return [value ? 'true' : 'false', Order.ATOMIC];
   };
 }
 

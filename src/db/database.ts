@@ -139,6 +139,84 @@ export async function deleteReusable(id: string): Promise<void> {
 
 // Current schema version - increment when project structure changes
 export const CURRENT_SCHEMA_VERSION = 1;
+export const APP_VERSION = '1.0.0';
+
+// === Cloud Sync Functions ===
+
+// Get all local projects for batch sync
+export async function getAllProjectsForSync(): Promise<Array<{
+  localId: string;
+  name: string;
+  data: string;
+  createdAt: number;
+  updatedAt: number;
+}>> {
+  const records = await db.projects.toArray();
+  return records.map(r => ({
+    localId: r.id,
+    name: r.name,
+    data: r.data,
+    createdAt: r.createdAt.getTime(),
+    updatedAt: r.updatedAt.getTime(),
+  }));
+}
+
+// Sync a single project from cloud to local
+export async function syncProjectFromCloud(cloudProject: {
+  localId: string;
+  name: string;
+  data: string;
+  createdAt: number;
+  updatedAt: number;
+  schemaVersion: string;
+}): Promise<{ action: 'created' | 'updated' | 'skipped' }> {
+  const existing = await db.projects.get(cloudProject.localId);
+
+  if (existing) {
+    // Only update if cloud version is newer
+    if (cloudProject.updatedAt > existing.updatedAt.getTime()) {
+      await db.projects.put({
+        id: cloudProject.localId,
+        name: cloudProject.name,
+        data: cloudProject.data,
+        createdAt: new Date(cloudProject.createdAt),
+        updatedAt: new Date(cloudProject.updatedAt),
+      });
+      return { action: 'updated' };
+    }
+    return { action: 'skipped' };
+  } else {
+    // Create new local project
+    await db.projects.put({
+      id: cloudProject.localId,
+      name: cloudProject.name,
+      data: cloudProject.data,
+      createdAt: new Date(cloudProject.createdAt),
+      updatedAt: new Date(cloudProject.updatedAt),
+    });
+    return { action: 'created' };
+  }
+}
+
+// Get single project record for sync
+export async function getProjectForSync(id: string): Promise<{
+  localId: string;
+  name: string;
+  data: string;
+  createdAt: number;
+  updatedAt: number;
+} | null> {
+  const record = await db.projects.get(id);
+  if (!record) return null;
+
+  return {
+    localId: record.id,
+    name: record.name,
+    data: record.data,
+    createdAt: record.createdAt.getTime(),
+    updatedAt: record.updatedAt.getTime(),
+  };
+}
 
 // Supported file types for backwards compatibility
 const SUPPORTED_FILE_TYPES = ['pochacoding-project', 'phaserblockly-project'] as const;

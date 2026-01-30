@@ -28,7 +28,16 @@ interface ProjectStore {
   duplicateObject: (sceneId: string, objectId: string) => GameObject | null;
   reorderObject: (sceneId: string, fromIndex: number, toIndex: number) => void;
 
-  // Variable actions
+  // Variable actions (global)
+  addGlobalVariable: (variable: Variable) => void;
+  removeGlobalVariable: (variableId: string) => void;
+  updateGlobalVariable: (variableId: string, updates: Partial<Variable>) => void;
+
+  // Variable actions (local - per object)
+  addLocalVariable: (sceneId: string, objectId: string, variable: Variable) => void;
+  removeLocalVariable: (sceneId: string, objectId: string, variableId: string) => void;
+
+  // Legacy aliases
   addVariable: (variable: Variable) => void;
   removeVariable: (variableId: string) => void;
   updateVariable: (variableId: string, updates: Partial<Variable>) => void;
@@ -379,8 +388,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     });
   },
 
-  // Variable actions
-  addVariable: (variable: Variable) => {
+  // Variable actions (global)
+  addGlobalVariable: (variable: Variable) => {
     set(state => ({
       project: state.project
         ? {
@@ -393,7 +402,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     }));
   },
 
-  removeVariable: (variableId: string) => {
+  removeGlobalVariable: (variableId: string) => {
     set(state => ({
       project: state.project
         ? {
@@ -406,7 +415,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     }));
   },
 
-  updateVariable: (variableId: string, updates: Partial<Variable>) => {
+  updateGlobalVariable: (variableId: string, updates: Partial<Variable>) => {
     set(state => ({
       project: state.project
         ? {
@@ -419,6 +428,70 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         : null,
       isDirty: true,
     }));
+  },
+
+  // Variable actions (local - per object)
+  addLocalVariable: (sceneId: string, objectId: string, variable: Variable) => {
+    set(state => {
+      if (!state.project) return state;
+      return {
+        project: {
+          ...state.project,
+          scenes: state.project.scenes.map(s =>
+            s.id === sceneId
+              ? {
+                  ...s,
+                  objects: s.objects.map(o =>
+                    o.id === objectId
+                      ? { ...o, localVariables: [...(o.localVariables || []), variable] }
+                      : o
+                  ),
+                }
+              : s
+          ),
+          updatedAt: new Date(),
+        },
+        isDirty: true,
+      };
+    });
+  },
+
+  removeLocalVariable: (sceneId: string, objectId: string, variableId: string) => {
+    set(state => {
+      if (!state.project) return state;
+      return {
+        project: {
+          ...state.project,
+          scenes: state.project.scenes.map(s =>
+            s.id === sceneId
+              ? {
+                  ...s,
+                  objects: s.objects.map(o =>
+                    o.id === objectId
+                      ? { ...o, localVariables: (o.localVariables || []).filter(v => v.id !== variableId) }
+                      : o
+                  ),
+                }
+              : s
+          ),
+          updatedAt: new Date(),
+        },
+        isDirty: true,
+      };
+    });
+  },
+
+  // Legacy aliases
+  addVariable: (variable: Variable) => {
+    get().addGlobalVariable(variable);
+  },
+
+  removeVariable: (variableId: string) => {
+    get().removeGlobalVariable(variableId);
+  },
+
+  updateVariable: (variableId: string, updates: Partial<Variable>) => {
+    get().updateGlobalVariable(variableId, updates);
   },
 
   // Component actions
@@ -553,6 +626,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       costumes: [],
       currentCostumeIndex: 0,
       sounds: [],
+      localVariables: [],
     };
 
     set(state => ({

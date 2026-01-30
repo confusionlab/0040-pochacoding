@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { RuntimeSprite } from './RuntimeSprite';
 
 type EventHandler = () => void | Promise<void>;
+type CloneStartHandler = (clone: RuntimeSprite) => void | Promise<void>;
 type ForeverHandler = () => void;
 
 // Debug log that can be viewed in the debug panel
@@ -36,7 +37,7 @@ interface ObjectHandlers {
   onTouching: Map<string, EventHandler[]>;
   onMessage: Map<string, EventHandler[]>;
   forever: ForeverHandler[];
-  onCloneStart: EventHandler[];
+  onCloneStart: CloneStartHandler[];
 }
 
 /**
@@ -260,7 +261,7 @@ export class RuntimeEngine {
     }
   }
 
-  onCloneStart(spriteId: string, handler: EventHandler): void {
+  onCloneStart(spriteId: string, handler: CloneStartHandler): void {
     debugLog('info', `Registering onCloneStart for sprite ${spriteId}`);
     const h = this.handlers.get(spriteId);
     if (h) h.onCloneStart.push(handler);
@@ -646,6 +647,80 @@ export class RuntimeEngine {
     }
   }
 
+  // --- Typed Variables (use variable ID instead of name) ---
+
+  // Variable definition lookup - injected by PhaserCanvas
+  private _variableLookup: ((varId: string) => { name: string; type: string; scope: string; defaultValue: unknown } | undefined) | null = null;
+
+  setVariableLookup(lookup: ((varId: string) => { name: string; type: string; scope: string; defaultValue: unknown } | undefined) | null) {
+    this._variableLookup = lookup;
+  }
+
+  getTypedVariable(varId: string, spriteId?: string): number | string | boolean {
+    const varDef = this._variableLookup?.(varId);
+    if (!varDef) {
+      debugLog('error', `Unknown variable ID: ${varId}`);
+      return 0;
+    }
+
+    // For local variables, check sprite's local store first
+    if (varDef.scope === 'local' && spriteId) {
+      const localVars = this.localVariables.get(spriteId);
+      if (localVars?.has(varId)) return localVars.get(varId)!;
+      // Return default value if not set
+      return varDef.defaultValue as number | string | boolean;
+    }
+
+    // Global variable
+    if (this.globalVariables.has(varId)) {
+      return this.globalVariables.get(varId)!;
+    }
+    return varDef.defaultValue as number | string | boolean;
+  }
+
+  setTypedVariable(varId: string, value: number | string | boolean, spriteId?: string): void {
+    const varDef = this._variableLookup?.(varId);
+    if (!varDef) {
+      debugLog('error', `Unknown variable ID: ${varId}`);
+      return;
+    }
+
+    // Type coercion based on variable type
+    let coercedValue: number | string | boolean = value;
+    switch (varDef.type) {
+      case 'integer':
+        coercedValue = Math.floor(Number(value)) || 0;
+        break;
+      case 'float':
+        coercedValue = Number(value) || 0;
+        break;
+      case 'string':
+        coercedValue = String(value);
+        break;
+      case 'boolean':
+        coercedValue = Boolean(value);
+        break;
+    }
+
+    if (varDef.scope === 'local' && spriteId) {
+      let localVars = this.localVariables.get(spriteId);
+      if (!localVars) {
+        localVars = new Map();
+        this.localVariables.set(spriteId, localVars);
+      }
+      localVars.set(varId, coercedValue);
+    } else {
+      this.globalVariables.set(varId, coercedValue);
+    }
+  }
+
+  changeTypedVariable(varId: string, delta: number, spriteId?: string): void {
+    const current = this.getTypedVariable(varId, spriteId);
+    if (typeof current === 'number') {
+      this.setTypedVariable(varId, current + delta, spriteId);
+    }
+  }
+
   // --- Clone System ---
 
   cloneSprite(spriteId: string): RuntimeSprite | null {
@@ -655,7 +730,10 @@ export class RuntimeEngine {
     // If the source is itself a clone, find the original (root) object
     // This ensures all clones come from the original template, not from other clones
     let originalId = spriteId;
+    debugLog('info', `cloneSprite called with spriteId="${spriteId}", isClone=${sourceSprite.isClone}`);
+
     while (sourceSprite.isClone && sourceSprite.cloneParentId) {
+      debugLog('info', `  tracing back: ${originalId} -> ${sourceSprite.cloneParentId}`);
       originalId = sourceSprite.cloneParentId;
       const parent = this.sprites.get(originalId);
       if (!parent) break;
@@ -664,6 +742,10 @@ export class RuntimeEngine {
 
     // Now sourceSprite is the original (non-clone) object
     const original = sourceSprite;
+    debugLog('info', `  using original: "${original.name}" (id=${originalId}, isClone=${original.isClone})`);
+    debugLog('info', `  original position: (${original.container.x}, ${original.container.y})`);
+    debugLog('info', `  original costumes: ${original.getCostumes().length}, index=${original.getCurrentCostumeIndex()}`);
+
 
     this.cloneCounter++;
     const cloneId = `${originalId}_clone_${this.cloneCounter}`;
@@ -716,11 +798,12 @@ export class RuntimeEngine {
     // which would cause incorrect behavior and potential infinite loops.
 
     // Execute onCloneStart handlers from the original object
+    // Pass the clone sprite so the handler operates on the clone, not the original
     const originalHandlers = this.handlers.get(originalId);
     if (originalHandlers) {
       for (const handler of originalHandlers.onCloneStart) {
         try {
-          handler();
+          handler(clone);
         } catch (e) {
           debugLog('error', `Error in onCloneStart for clone ${cloneId}: ${e}`);
         }

@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 import { useProjectStore } from '@/store/projectStore';
 import { useEditorStore } from '@/store/editorStore';
 import { RuntimeEngine, setCurrentRuntime, registerCodeGenerators, generateCodeForObject } from '@/phaser';
-import type { Scene as SceneData, GameObject, ComponentDefinition } from '@/types';
+import type { Scene as SceneData, GameObject, ComponentDefinition, Variable } from '@/types';
 import { getEffectiveObjectProps } from '@/types';
 
 // Register code generators once at module load
@@ -145,7 +145,9 @@ export function PhaserCanvas({ isPlaying }: PhaserCanvasProps) {
           },
           create: function(this: Phaser.Scene) {
             if (isPlaying) {
-              createPlayScene(this, selectedScene, project.scenes, project.components || [], runtimeRef, canvasWidth, canvasHeight);
+              // Collect all objects from all scenes for variable lookup
+              const allObjects = project.scenes.flatMap(s => s.objects);
+              createPlayScene(this, selectedScene, project.scenes, project.components || [], runtimeRef, canvasWidth, canvasHeight, project.globalVariables, allObjects);
             } else {
               createEditorScene(this, selectedScene, selectObject, selectedObjectId, handleObjectDragEnd, canvasWidth, canvasHeight, project.components || []);
             }
@@ -676,7 +678,9 @@ function createPlayScene(
   components: ComponentDefinition[],
   runtimeRef: React.MutableRefObject<RuntimeEngine | null>,
   canvasWidth: number,
-  canvasHeight: number
+  canvasHeight: number,
+  globalVariables: Variable[],
+  allObjects: GameObject[]
 ) {
   if (!sceneData) return;
 
@@ -689,6 +693,33 @@ function createPlayScene(
   const runtime = new RuntimeEngine(scene, canvasWidth, canvasHeight);
   runtimeRef.current = runtime;
   setCurrentRuntime(runtime);
+
+  // Set up variable lookup for typed variables
+  runtime.setVariableLookup((varId: string) => {
+    // Check global variables
+    const globalVar = globalVariables.find(v => v.id === varId);
+    if (globalVar) {
+      return {
+        name: globalVar.name,
+        type: globalVar.type,
+        scope: globalVar.scope,
+        defaultValue: globalVar.defaultValue,
+      };
+    }
+    // Check local variables in all objects
+    for (const obj of allObjects) {
+      const localVar = obj.localVariables?.find(v => v.id === varId);
+      if (localVar) {
+        return {
+          name: localVar.name,
+          type: localVar.type,
+          scope: localVar.scope,
+          defaultValue: localVar.defaultValue,
+        };
+      }
+    }
+    return undefined;
+  });
 
   // Configure ground from scene settings
   if (sceneData.ground) {

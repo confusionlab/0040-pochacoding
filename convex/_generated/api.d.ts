@@ -16,6 +16,7 @@ import type {
 import type * as costumeLibrary from "../costumeLibrary.js";
 import type * as library from "../library.js";
 import type * as objectLibrary from "../objectLibrary.js";
+import type * as projects from "../projects.js";
 import type * as soundLibrary from "../soundLibrary.js";
 
 /**
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   costumeLibrary: typeof costumeLibrary;
   library: typeof library;
   objectLibrary: typeof objectLibrary;
+  projects: typeof projects;
   soundLibrary: typeof soundLibrary;
 }>;
 export declare const api: FilterApi<

@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useProjectStore } from '@/store/projectStore';
 import { useEditorStore } from '@/store/editorStore';
 import { listProjects, loadProject, deleteProject, downloadProject, importProjectFromFile } from '@/db/database';
+import { useCloudSync } from '@/hooks/useCloudSync';
 import {
   Dialog,
   DialogContent,
@@ -33,17 +34,36 @@ export function ProjectDialog({ onClose, onProjectOpen }: ProjectDialogProps) {
   const [newProjectName, setNewProjectName] = useState('');
   const [tab, setTab] = useState<string>(currentProject ? 'open' : 'new');
   const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    loadProjectsList();
-  }, []);
+  // Cloud sync hook
+  const { syncAllFromCloud, cloudProjects } = useCloudSync({ syncOnMount: false });
 
-  const loadProjectsList = async () => {
+  const loadProjectsList = useCallback(async () => {
     const list = await listProjects();
     setProjects(list);
-  };
+  }, []);
+
+  // Sync from cloud when dialog opens and cloud projects are available
+  useEffect(() => {
+    const syncAndLoad = async () => {
+      if (cloudProjects && cloudProjects.length > 0) {
+        setSyncing(true);
+        try {
+          await syncAllFromCloud();
+          await loadProjectsList();
+        } finally {
+          setSyncing(false);
+        }
+      } else {
+        // No cloud projects, just load local
+        loadProjectsList();
+      }
+    };
+    syncAndLoad();
+  }, [cloudProjects, syncAllFromCloud, loadProjectsList]);
 
   const handleCreateProject = () => {
     if (!newProjectName.trim()) return;
@@ -270,9 +290,11 @@ export function ProjectDialog({ onClose, onProjectOpen }: ProjectDialogProps) {
           </TabsContent>
         </Tabs>
 
-        {loading && (
+        {(loading || syncing) && (
           <div className="absolute inset-0 bg-background/80 flex items-center justify-center rounded-lg">
-            <div className="text-muted-foreground">Loading...</div>
+            <div className="text-muted-foreground">
+              {syncing ? 'Syncing from cloud...' : 'Loading...'}
+            </div>
           </div>
         )}
       </DialogContent>

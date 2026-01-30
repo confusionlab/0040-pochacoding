@@ -81,6 +81,8 @@ export interface GameObject {
   costumes: Costume[];
   currentCostumeIndex: number;
   sounds: Sound[];
+  // Local variables for this object
+  localVariables: Variable[];
 }
 
 export interface CostumeBounds {
@@ -157,12 +159,16 @@ export interface ReusableObject {
 
 // Variable Types
 
+export type VariableType = 'string' | 'integer' | 'float' | 'boolean';
+
 export interface Variable {
   id: string;
   name: string;
-  type: 'number' | 'string' | 'boolean';
+  type: VariableType;
   defaultValue: number | string | boolean;
   scope: 'global' | 'local';
+  // For local variables, which object they belong to (optional, for filtering)
+  objectId?: string;
 }
 
 // Editor State Types
@@ -250,6 +256,7 @@ export function createDefaultGameObject(name: string): GameObject {
     costumes: [defaultCostume],
     currentCostumeIndex: 0,
     sounds: [],
+    localVariables: [],
   };
 }
 

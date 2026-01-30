@@ -1,6 +1,9 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+// Schema version for compatibility tracking
+export const SCHEMA_VERSION = "1.0";
+
 // Shared bounds validator
 const boundsValidator = v.object({
   x: v.number(),
@@ -91,4 +94,19 @@ export default defineSchema({
     collider: v.optional(colliderValidator),
     createdAt: v.number(),
   }),
+
+  // Projects - cloud-synced project storage
+  // Projects are primarily stored locally (IndexedDB), synced to cloud on exit
+  projects: defineTable({
+    // Project ID from local storage (used as sync key)
+    localId: v.string(),
+    name: v.string(),
+    // Full project data as JSON string (includes scenes, settings, globalVariables, components)
+    data: v.string(),
+    // Timestamps for sync conflict resolution
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    // Schema version for migrations
+    schemaVersion: v.string(),
+  }).index("by_localId", ["localId"]),
 });
