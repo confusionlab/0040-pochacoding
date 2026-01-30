@@ -120,10 +120,8 @@ export interface PhysicsConfig {
   gravityY: number;
   velocityX: number;
   velocityY: number;
-  bounceX: number;
-  bounceY: number;
-  collideWorldBounds: boolean;
-  immovable: boolean;
+  bounce: number;
+  allowRotation: boolean;
 }
 
 // Asset Types
@@ -267,10 +265,8 @@ export function createDefaultPhysicsConfig(): PhysicsConfig {
     gravityY: 300,
     velocityX: 0,
     velocityY: 0,
-    bounceX: 0,
-    bounceY: 0.2,
-    collideWorldBounds: true,
-    immovable: false,
+    bounce: 0.2,
+    allowRotation: false,
   };
 }
 

@@ -515,10 +515,8 @@ function PhysicsToggle({ object, sceneId, updateObject }: FieldProps) {
           gravityY: 300,
           velocityX: 0,
           velocityY: 0,
-          bounceX: 0,
-          bounceY: 0,
-          collideWorldBounds: true,
-          immovable: false,
+          bounce: 0.2,
+          allowRotation: false,
         },
       };
 
@@ -591,18 +589,9 @@ function PhysicsProperties({ object, sceneId, updateObject }: FieldProps) {
         <div className="text-xs text-muted-foreground mb-2">Bounce</div>
         <div className="flex gap-2">
           <ScrubInput
-            label="X"
-            value={physics.bounceX}
-            onChange={(bounceX) => updatePhysics({ bounceX })}
-            step={0.1}
-            precision={2}
-            min={0}
-            max={1}
-          />
-          <ScrubInput
-            label="Y"
-            value={physics.bounceY}
-            onChange={(bounceY) => updatePhysics({ bounceY })}
+            label=""
+            value={physics.bounce}
+            onChange={(bounce) => updatePhysics({ bounce })}
             step={0.1}
             precision={2}
             min={0}
@@ -611,28 +600,16 @@ function PhysicsProperties({ object, sceneId, updateObject }: FieldProps) {
         </div>
       </div>
 
-      {/* Checkboxes */}
-      <div className="flex gap-4">
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="collide-bounds"
-            checked={physics.collideWorldBounds}
-            onCheckedChange={(checked) => updatePhysics({ collideWorldBounds: !!checked })}
-          />
-          <Label htmlFor="collide-bounds" className="text-xs text-muted-foreground cursor-pointer">
-            Collide Bounds
-          </Label>
-        </div>
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="immovable"
-            checked={physics.immovable}
-            onCheckedChange={(checked) => updatePhysics({ immovable: !!checked })}
-          />
-          <Label htmlFor="immovable" className="text-xs text-muted-foreground cursor-pointer">
-            Immovable
-          </Label>
-        </div>
+      {/* Rotate Toggle */}
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id="allow-rotation"
+          checked={physics.allowRotation}
+          onCheckedChange={(checked) => updatePhysics({ allowRotation: !!checked })}
+        />
+        <Label htmlFor="allow-rotation" className="text-xs text-muted-foreground cursor-pointer">
+          Rotate with Physics
+        </Label>
       </div>
     </div>
   );

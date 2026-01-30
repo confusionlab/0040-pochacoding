@@ -658,10 +658,9 @@ function createPlayScene(
       if (physics?.enabled) {
         // Apply physics settings
         body.setGravityY(physics.gravityY ?? 0);
-        body.setBounce(physics.bounceX ?? 0, physics.bounceY ?? 0);
-        body.setCollideWorldBounds(physics.collideWorldBounds ?? false);
-        body.setImmovable(physics.immovable ?? false);
+        body.setBounce(physics.bounce ?? 0, physics.bounce ?? 0);
         body.setVelocity(physics.velocityX ?? 0, physics.velocityY ?? 0);
+        body.setAllowRotation(physics.allowRotation ?? false);
 
         // Set body type (static bodies don't move)
         if (physics.bodyType === 'static') {
