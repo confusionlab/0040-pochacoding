@@ -431,7 +431,11 @@ export function getToolboxConfig(): any {
           { kind: 'block', type: 'sensing_mouse_y' },
           { kind: 'block', type: 'sensing_touching' },
           { kind: 'block', type: 'sensing_touching_ground' },
+          { kind: 'block', type: 'sensing_touching_object' },
           { kind: 'block', type: 'sensing_distance_to' },
+          { kind: 'block', type: 'sensing_object_x' },
+          { kind: 'block', type: 'sensing_object_y' },
+          { kind: 'block', type: 'sensing_object_costume' },
         ],
       },
       {
@@ -571,6 +575,14 @@ export function getToolboxConfig(): any {
           { kind: 'sep', gap: '8' },
           { kind: 'label', text: 'Boolean Value' },
           { kind: 'block', type: 'logic_boolean' },
+        ],
+      },
+      {
+        kind: 'category',
+        name: 'Debug',
+        colour: '#888888',
+        contents: [
+          { kind: 'block', type: 'debug_console_log' },
         ],
       },
     ],
@@ -1003,6 +1015,55 @@ function registerCustomBlocks() {
       // Add validator for pick from stage
       const targetField = this.getField('TARGET') as Blockly.FieldDropdown;
       if (targetField) targetField.setValidator(createObjectPickerValidator(true));
+    }
+  };
+
+  Blockly.Blocks['sensing_touching_object'] = {
+    init: function() {
+      this.appendDummyInput()
+        .appendField('touching object');
+      this.setOutput(true, 'Object');
+      this.setColour('#5CB1D6');
+      this.setTooltip('Returns the object this sprite is touching, or null if not touching anything');
+    }
+  };
+
+  Blockly.Blocks['sensing_object_x'] = {
+    init: function() {
+      this.appendValueInput('OBJECT')
+        .setCheck('Object');
+      this.appendDummyInput()
+        .appendField("'s x");
+      this.setInputsInline(true);
+      this.setOutput(true, 'Number');
+      this.setColour('#5CB1D6');
+      this.setTooltip("Get an object's x position");
+    }
+  };
+
+  Blockly.Blocks['sensing_object_y'] = {
+    init: function() {
+      this.appendValueInput('OBJECT')
+        .setCheck('Object');
+      this.appendDummyInput()
+        .appendField("'s y");
+      this.setInputsInline(true);
+      this.setOutput(true, 'Number');
+      this.setColour('#5CB1D6');
+      this.setTooltip("Get an object's y position");
+    }
+  };
+
+  Blockly.Blocks['sensing_object_costume'] = {
+    init: function() {
+      this.appendValueInput('OBJECT')
+        .setCheck('Object');
+      this.appendDummyInput()
+        .appendField("'s costume #");
+      this.setInputsInline(true);
+      this.setOutput(true, 'Number');
+      this.setColour('#5CB1D6');
+      this.setTooltip("Get an object's current costume number");
     }
   };
 
@@ -1654,6 +1715,19 @@ function registerCustomBlocks() {
       this.setOutput(true, 'Boolean'); // Zelos renders Boolean as hexagonal/diamond
       this.setColour('#59C059');
       this.setTooltip('A boolean value (true or false)');
+    }
+  };
+
+  // Debug blocks
+  Blockly.Blocks['debug_console_log'] = {
+    init: function() {
+      this.appendValueInput('VALUE')
+        .appendField('console log');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true, null);
+      this.setNextStatement(true, null);
+      this.setColour('#888888');
+      this.setTooltip('Log a value to the debug console');
     }
   };
 }

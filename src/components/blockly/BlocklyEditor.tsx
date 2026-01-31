@@ -5,6 +5,7 @@ import { useProjectStore } from '@/store/projectStore';
 import { useEditorStore } from '@/store/editorStore';
 import { getToolboxConfig, registerTypedVariablesCategory, setAddVariableCallback } from './toolbox';
 import { AddVariableDialog } from '@/components/dialogs/AddVariableDialog';
+import { BlockSearchModal } from './BlockSearchModal';
 import type { UndoRedoHandler } from '@/store/editorStore';
 import type { Variable } from '@/types';
 
@@ -18,6 +19,7 @@ export function BlocklyEditor() {
   const currentObjectIdRef = useRef<string | null>(null);
   const isLoadingRef = useRef(false);
   const [showAddVariableDialog, setShowAddVariableDialog] = useState(false);
+  const [showBlockSearch, setShowBlockSearch] = useState(false);
 
   const { selectedSceneId, selectedObjectId, registerCodeUndo } = useEditorStore();
   const { project, addGlobalVariable, addLocalVariable } = useProjectStore();
@@ -37,6 +39,21 @@ export function BlocklyEditor() {
     currentSceneIdRef.current = selectedSceneId;
     currentObjectIdRef.current = selectedObjectId;
   }, [selectedSceneId, selectedObjectId]);
+
+  // Cmd+K to open block search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        if (selectedObjectId) {
+          setShowBlockSearch(true);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedObjectId]);
 
 
   // Initialize Blockly workspace
@@ -184,6 +201,11 @@ export function BlocklyEditor() {
         onOpenChange={setShowAddVariableDialog}
         onAdd={handleAddVariable}
         objectName={currentObjectName}
+      />
+      <BlockSearchModal
+        isOpen={showBlockSearch}
+        onClose={() => setShowBlockSearch(false)}
+        workspace={workspaceRef.current}
       />
     </>
   );

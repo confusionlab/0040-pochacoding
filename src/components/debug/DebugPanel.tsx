@@ -185,6 +185,7 @@ function getLogColor(type: string): string {
     case 'event': return 'text-green-300';
     case 'action': return 'text-yellow-300';
     case 'error': return 'text-red-400';
+    case 'user': return 'text-purple-300 font-bold';
     default: return 'text-gray-300';
   }
 }

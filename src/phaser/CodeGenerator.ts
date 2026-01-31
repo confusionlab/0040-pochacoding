@@ -328,6 +328,25 @@ export function registerCodeGenerators(): void {
     return [`runtime.distanceTo(sprite.id, '${targetId}')`, Order.FUNCTION_CALL];
   };
 
+  javascriptGenerator.forBlock['sensing_touching_object'] = function() {
+    return ['runtime.getTouchingObject(sprite.id)', Order.FUNCTION_CALL];
+  };
+
+  javascriptGenerator.forBlock['sensing_object_x'] = function(block) {
+    const obj = javascriptGenerator.valueToCode(block, 'OBJECT', Order.ATOMIC) || 'null';
+    return [`(${obj}?.getX() ?? 0)`, Order.FUNCTION_CALL];
+  };
+
+  javascriptGenerator.forBlock['sensing_object_y'] = function(block) {
+    const obj = javascriptGenerator.valueToCode(block, 'OBJECT', Order.ATOMIC) || 'null';
+    return [`(${obj}?.getY() ?? 0)`, Order.FUNCTION_CALL];
+  };
+
+  javascriptGenerator.forBlock['sensing_object_costume'] = function(block) {
+    const obj = javascriptGenerator.valueToCode(block, 'OBJECT', Order.ATOMIC) || 'null';
+    return [`(${obj}?.getCostumeNumber() ?? 0)`, Order.FUNCTION_CALL];
+  };
+
   // --- Messages ---
 
   javascriptGenerator.forBlock['event_when_receive'] = function(block) {
@@ -349,7 +368,7 @@ export function registerCodeGenerators(): void {
   // --- Clone ---
 
   javascriptGenerator.forBlock['control_clone'] = function() {
-    return 'runtime.cloneSprite(sprite.id);\n';
+    return 'await runtime.cloneSprite(sprite.id);\n';
   };
 
   javascriptGenerator.forBlock['control_clone_object'] = function(block) {
@@ -358,7 +377,7 @@ export function registerCodeGenerators(): void {
     if (!targetId) {
       return '/* clone target not set */\n';
     }
-    return `runtime.cloneSprite('${targetId}');\n`;
+    return `await runtime.cloneSprite('${targetId}');\n`;
   };
 
   javascriptGenerator.forBlock['control_delete_clone'] = function() {
@@ -444,6 +463,12 @@ export function registerCodeGenerators(): void {
   javascriptGenerator.forBlock['logic_boolean'] = function(block) {
     const value = block.getFieldValue('BOOL') === 'TRUE';
     return [value ? 'true' : 'false', Order.ATOMIC];
+  };
+
+  // Debug
+  javascriptGenerator.forBlock['debug_console_log'] = function(block) {
+    const value = javascriptGenerator.valueToCode(block, 'VALUE', Order.ATOMIC) || "''";
+    return `runtime.consoleLog(${value});\n`;
   };
 }
 

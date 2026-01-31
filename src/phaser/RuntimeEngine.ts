@@ -8,7 +8,7 @@ type ForeverHandler = (sprite: RuntimeSprite) => void;
 // Debug log that can be viewed in the debug panel
 export interface DebugLogEntry {
   time: number;
-  type: 'info' | 'event' | 'action' | 'error';
+  type: 'info' | 'event' | 'action' | 'error' | 'user';
   message: string;
 }
 
@@ -545,6 +545,16 @@ export class RuntimeEngine {
     });
   }
 
+  consoleLog(value: unknown): void {
+    const message = typeof value === 'object' ? JSON.stringify(value) : String(value);
+    const entry: DebugLogEntry = { time: Date.now(), type: 'user', message };
+    runtimeDebugLog.push(entry);
+    if (runtimeDebugLog.length > 200) {
+      runtimeDebugLog.shift();
+    }
+    console.log(`[User] ${message}`);
+  }
+
   stopAll(): void {
     this._isRunning = false;
     this.activeForeverLoops.clear();
@@ -725,7 +735,7 @@ export class RuntimeEngine {
 
   private static MAX_CLONES = 300; // Prevent infinite clone crashes
 
-  cloneSprite(spriteId: string): RuntimeSprite | null {
+  async cloneSprite(spriteId: string): Promise<RuntimeSprite | null> {
     // Safeguard: limit total clone count
     const cloneCount = Array.from(this.sprites.values()).filter(s => s.isClone).length;
     if (cloneCount >= RuntimeEngine.MAX_CLONES) {
@@ -785,21 +795,10 @@ export class RuntimeEngine {
     // Copy all state from original (costumes, direction, size, configs, etc.)
     clone.copyStateFrom(original);
 
-    // Copy physics body if original has one
-    const originalBody = (original.container as unknown as { body?: MatterJS.BodyType }).body;
-    if (originalBody && this.scene.matter?.add) {
-      // Create physics body for clone with same settings
-      clone.enablePhysics();
-
-      // Match velocity from original
-      const cloneBody = (clone.container as unknown as { body?: MatterJS.BodyType }).body;
-      if (cloneBody && originalBody.velocity) {
-        this.scene.matter.body.setVelocity(cloneBody, {
-          x: originalBody.velocity.x,
-          y: originalBody.velocity.y
-        });
-      }
-    }
+    // NOTE: We intentionally do NOT copy physics here.
+    // The clone's onStart handlers should set up physics as needed.
+    // Copying physics before handlers run causes race conditions where
+    // gravity affects the clone before disablePhysics() can be called.
 
     // Copy event handlers from original to clone
     // Since handlers now receive sprite as a parameter, they'll work correctly for clones
@@ -845,11 +844,12 @@ export class RuntimeEngine {
     }
 
     // Execute onStart handlers for the clone ("When I start" runs for clones too)
+    // Must await handlers to ensure they complete in order (e.g., goTo before while loop)
     if (cloneHandlers) {
       for (const handler of cloneHandlers.onStart) {
         try {
           debugLog('event', `Executing onStart handler for clone ${cloneId}`);
-          handler(clone);
+          await handler(clone);
         } catch (e) {
           debugLog('error', `Error in onStart for clone ${cloneId}: ${e}`);
         }
@@ -860,8 +860,8 @@ export class RuntimeEngine {
     return clone;
   }
 
-  cloneSpriteAt(spriteId: string, userX: number, userY: number): RuntimeSprite | null {
-    const clone = this.cloneSprite(spriteId);
+  async cloneSpriteAt(spriteId: string, userX: number, userY: number): Promise<RuntimeSprite | null> {
+    const clone = await this.cloneSprite(spriteId);
     if (clone) {
       clone.goTo(userX, userY);
     }
@@ -919,6 +919,24 @@ export class RuntimeEngine {
     if (!target) return false;
 
     return this.isTouchingSingle(sprite, target);
+  }
+
+  getTouchingObject(spriteId: string): RuntimeSprite | null {
+    const sprite = this.sprites.get(spriteId);
+    if (!sprite) return null;
+
+    // Check all other sprites for collision
+    for (const target of this.sprites.values()) {
+      if (target.id === spriteId) continue; // Don't check self
+      if (target.isStopped()) continue; // Skip stopped sprites
+      if (!target.container.visible) continue; // Skip invisible sprites
+
+      if (this.isTouchingSingle(sprite, target)) {
+        return target;
+      }
+    }
+
+    return null;
   }
 
   private isTouchingSingle(sprite: RuntimeSprite, target: RuntimeSprite): boolean {
