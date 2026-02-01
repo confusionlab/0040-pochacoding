@@ -199,6 +199,40 @@ function getAllObjectsDropdownOptions(includePicker: boolean = true): Array<[str
   return generateObjectDropdownOptions(undefined, includePicker);
 }
 
+// Dynamic dropdown generator for sound selection (from current object's sounds)
+function getSoundDropdownOptions(): Array<[string, string]> {
+  const project = useProjectStore.getState().project;
+  const selectedSceneId = useEditorStore.getState().selectedSceneId;
+  const selectedObjectId = useEditorStore.getState().selectedObjectId;
+
+  if (!project || !selectedSceneId || !selectedObjectId) {
+    return [['(no sounds)', '']];
+  }
+
+  const scene = project.scenes.find(s => s.id === selectedSceneId);
+  const object = scene?.objects.find(o => o.id === selectedObjectId);
+  if (!object) {
+    return [['(no sounds)', '']];
+  }
+
+  // Get sounds from the object (or from its component if it's a component instance)
+  let sounds: Array<{ id: string; name: string }> = [];
+  if (object.componentId) {
+    const component = project.components?.find(c => c.id === object.componentId);
+    if (component?.sounds) {
+      sounds = component.sounds;
+    }
+  } else {
+    sounds = object.sounds || [];
+  }
+
+  if (sounds.length === 0) {
+    return [['(no sounds)', '']];
+  }
+
+  return sounds.map(sound => [sound.name, sound.id]);
+}
+
 // Dropdown with special options + objects
 function getTargetDropdownOptions(includeEdge: boolean = false, includeMouse: boolean = false, includeMyClones: boolean = false): () => Array<[string, string]> {
   return function() {
@@ -1515,12 +1549,7 @@ function registerCustomBlocks() {
     init: function() {
       this.appendDummyInput()
         .appendField('play sound')
-        .appendField(new Blockly.FieldDropdown([
-          ['pop', 'pop'],
-          ['jump', 'jump'],
-          ['coin', 'coin'],
-          ['hit', 'hit'],
-        ]), 'SOUND');
+        .appendField(new PreservingFieldDropdown(getSoundDropdownOptions), 'SOUND');
       this.setPreviousStatement(true, null);
       this.setNextStatement(true, null);
       this.setColour('#CF63CF');
@@ -1532,12 +1561,7 @@ function registerCustomBlocks() {
     init: function() {
       this.appendDummyInput()
         .appendField('play sound')
-        .appendField(new Blockly.FieldDropdown([
-          ['pop', 'pop'],
-          ['jump', 'jump'],
-          ['coin', 'coin'],
-          ['hit', 'hit'],
-        ]), 'SOUND')
+        .appendField(new PreservingFieldDropdown(getSoundDropdownOptions), 'SOUND')
         .appendField('until done');
       this.setPreviousStatement(true, null);
       this.setNextStatement(true, null);

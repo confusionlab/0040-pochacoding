@@ -367,7 +367,7 @@ export const WaveformEditor = memo(({ sound, onTrimChange }: WaveformEditorProps
   }
 
   return (
-    <div className="flex-1 flex flex-col p-4 bg-background">
+    <div className="flex-1 flex flex-col min-h-0 min-w-0 p-4 bg-background">
       {/* Waveform */}
       <div
         ref={containerRef}

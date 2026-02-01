@@ -136,7 +136,7 @@ export const SoundList = memo(({
   };
 
   return (
-    <div className="flex flex-col h-full w-48 border-r bg-muted/30">
+    <div className="flex flex-col h-full min-h-0 w-48 border-r bg-muted/30 shrink-0">
       {/* Header */}
       <div className="flex items-center justify-between px-2 py-2 border-b">
         <span className="text-xs font-medium">Sounds</span>
