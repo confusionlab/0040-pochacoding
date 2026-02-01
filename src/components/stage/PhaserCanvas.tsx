@@ -889,6 +889,7 @@ function createPlayScene(
 
     // Register sounds with runtime (use effective sounds for component instances)
     const sounds = effectiveProps.sounds || [];
+    console.log(`[Sound] Object "${obj.name}" has ${sounds.length} sounds:`, sounds.map(s => ({ id: s.id, name: s.name, hasData: !!s.assetId })));
     if (sounds.length > 0) {
       runtime.registerSounds(sounds);
     }

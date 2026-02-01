@@ -1286,12 +1286,14 @@ export class RuntimeEngine {
    */
   registerSounds(sounds: Array<{ id: string; assetId: string; trimStart?: number; trimEnd?: number }>): void {
     for (const sound of sounds) {
+      debugLog('info', `Registering sound: ${sound.id} (has data: ${!!sound.assetId}, data length: ${sound.assetId?.length || 0})`);
       this.soundDefinitions.set(sound.id, {
         dataUrl: sound.assetId,
         trimStart: sound.trimStart,
         trimEnd: sound.trimEnd,
       });
     }
+    debugLog('info', `Total registered sounds: ${this.soundDefinitions.size}`);
   }
 
   playSound(soundKey: string): void {
