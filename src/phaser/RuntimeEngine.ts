@@ -1277,40 +1277,115 @@ export class RuntimeEngine {
   // --- Sound ---
 
   private volume: number = 100;
-  private sounds: Map<string, Phaser.Sound.BaseSound> = new Map();
+  private playingAudios: HTMLAudioElement[] = [];
+  // Store sound definitions: soundId -> { dataUrl, trimStart, trimEnd }
+  private soundDefinitions: Map<string, { dataUrl: string; trimStart?: number; trimEnd?: number }> = new Map();
+
+  /**
+   * Register sounds from an object so they can be played by ID
+   */
+  registerSounds(sounds: Array<{ id: string; assetId: string; trimStart?: number; trimEnd?: number }>): void {
+    for (const sound of sounds) {
+      this.soundDefinitions.set(sound.id, {
+        dataUrl: sound.assetId,
+        trimStart: sound.trimStart,
+        trimEnd: sound.trimEnd,
+      });
+    }
+  }
 
   playSound(soundKey: string): void {
-    // For now, we'll create simple synthesized sounds
-    // In a full implementation, this would load actual audio files
-    const sound = this.scene.sound.add(soundKey, { volume: this.volume / 100 });
-    sound.play();
-    this.sounds.set(soundKey, sound);
+    const soundDef = this.soundDefinitions.get(soundKey);
+    if (!soundDef) {
+      debugLog('error', `Sound "${soundKey}" not found`);
+      return;
+    }
+
+    const audio = new Audio(soundDef.dataUrl);
+    audio.volume = this.volume / 100;
+
+    // Apply trim start
+    if (soundDef.trimStart) {
+      audio.currentTime = soundDef.trimStart;
+    }
+
+    // Handle trim end
+    if (soundDef.trimEnd) {
+      audio.ontimeupdate = () => {
+        if (audio.currentTime >= soundDef.trimEnd!) {
+          audio.pause();
+          this.removeAudio(audio);
+        }
+      };
+    }
+
+    audio.onended = () => this.removeAudio(audio);
+    audio.play().catch(e => debugLog('error', `Failed to play sound: ${e}`));
+    this.playingAudios.push(audio);
   }
 
   playSoundUntilDone(soundKey: string): Promise<void> {
     return new Promise(resolve => {
-      const sound = this.scene.sound.add(soundKey, { volume: this.volume / 100 });
-      sound.on('complete', () => {
+      const soundDef = this.soundDefinitions.get(soundKey);
+      if (!soundDef) {
+        debugLog('error', `Sound "${soundKey}" not found`);
+        resolve();
+        return;
+      }
+
+      const audio = new Audio(soundDef.dataUrl);
+      audio.volume = this.volume / 100;
+
+      // Apply trim start
+      if (soundDef.trimStart) {
+        audio.currentTime = soundDef.trimStart;
+      }
+
+      // Handle trim end
+      if (soundDef.trimEnd) {
+        audio.ontimeupdate = () => {
+          if (audio.currentTime >= soundDef.trimEnd!) {
+            audio.pause();
+            this.removeAudio(audio);
+            resolve();
+          }
+        };
+      }
+
+      audio.onended = () => {
+        this.removeAudio(audio);
+        resolve();
+      };
+
+      audio.play().catch(e => {
+        debugLog('error', `Failed to play sound: ${e}`);
         resolve();
       });
-      sound.play();
-      this.sounds.set(soundKey, sound);
+      this.playingAudios.push(audio);
     });
   }
 
+  private removeAudio(audio: HTMLAudioElement): void {
+    const index = this.playingAudios.indexOf(audio);
+    if (index > -1) {
+      this.playingAudios.splice(index, 1);
+    }
+  }
+
   stopAllSounds(): void {
-    this.scene.sound.stopAll();
-    this.sounds.clear();
+    for (const audio of this.playingAudios) {
+      audio.pause();
+      audio.src = '';
+    }
+    this.playingAudios = [];
   }
 
   setVolume(volume: number): void {
     this.volume = Math.max(0, Math.min(100, volume));
     // Update all playing sounds
-    this.sounds.forEach(sound => {
-      if ('setVolume' in sound) {
-        (sound as Phaser.Sound.WebAudioSound).setVolume(this.volume / 100);
-      }
-    });
+    for (const audio of this.playingAudios) {
+      audio.volume = this.volume / 100;
+    }
   }
 
   changeVolume(delta: number): void {

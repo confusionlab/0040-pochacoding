@@ -887,6 +887,12 @@ function createPlayScene(
       runtimeSprite.setCostumes(costumes, effectiveProps.currentCostumeIndex || 0);
     }
 
+    // Register sounds with runtime (use effective sounds for component instances)
+    const sounds = effectiveProps.sounds || [];
+    if (sounds.length > 0) {
+      runtime.registerSounds(sounds);
+    }
+
     // Store collider and physics config on sprite for later use (e.g., when enabling physics via code)
     const physics = effectiveProps.physics;
     const collider = effectiveProps.collider;
