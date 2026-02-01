@@ -213,6 +213,11 @@ export class RuntimeSprite {
     return this._size;
   }
 
+  // Set internal size value without changing container scale (used for template cloning)
+  setSizeInternal(percent: number): void {
+    this._size = percent;
+  }
+
   setOpacity(alpha: number): void {
     if (this._stopped) return;
     this.container.setAlpha(alpha / 100);
@@ -300,7 +305,10 @@ export class RuntimeSprite {
       const img = new Image();
       img.onload = () => {
         if (this.scene && this.scene.textures) {
-          this.scene.textures.addImage(textureKey, img);
+          // Check again inside callback to handle race conditions
+          if (!this.scene.textures.exists(textureKey)) {
+            this.scene.textures.addImage(textureKey, img);
+          }
           this._createCostumeImage(textureKey);
         }
       };
@@ -521,8 +529,10 @@ export class RuntimeSprite {
         const container = this.container;
 
         // Set up position syncing from body to container (subtract offset)
+        // Skip for static bodies - they shouldn't move due to physics, and motion blocks
+        // already set container position directly before syncing to body
         this.scene.matter.world.on('afterupdate', () => {
-          if (body && container.active) {
+          if (body && container.active && !body.isStatic) {
             const offsetX = container.getData('colliderOffsetX') ?? 0;
             const offsetY = container.getData('colliderOffsetY') ?? 0;
             container.setPosition(body.position.x - offsetX, body.position.y - offsetY);
@@ -627,7 +637,18 @@ export class RuntimeSprite {
     if (this._stopped) return;
     const body = this.getMatterBody();
     if (body) {
+      // Zero out all velocity first
+      this.scene.matter.body.setVelocity(body, { x: 0, y: 0 });
+      this.scene.matter.body.setAngularVelocity(body, 0);
+      // Make the body static - it will no longer respond to forces or collisions
       this.scene.matter.body.setStatic(body, true);
+      // Sync body position to current container position to lock it in place
+      const offsetX = this.container.getData('colliderOffsetX') ?? 0;
+      const offsetY = this.container.getData('colliderOffsetY') ?? 0;
+      this.scene.matter.body.setPosition(body, {
+        x: this.container.x + offsetX,
+        y: this.container.y + offsetY
+      });
       debugLog('action', `${this.name}.makeImmovable()`);
     } else {
       debugLog('error', `${this.name}.makeImmovable: No physics body found.`);

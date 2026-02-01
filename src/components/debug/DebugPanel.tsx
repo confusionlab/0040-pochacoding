@@ -8,20 +8,23 @@ import { Checkbox } from '@/components/ui/checkbox';
 
 export function DebugPanel() {
   const [isOpen, setIsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'code' | 'xml' | 'state' | 'runtime'>('code');
+  const [activeTab, setActiveTab] = useState<'code' | 'xml' | 'state' | 'runtime' | 'console'>('code');
   const [, setLogRefresh] = useState(0);
 
   const { project } = useProjectStore();
   const { selectedSceneId, selectedObjectId, isPlaying, showColliderOutlines, setShowColliderOutlines } = useEditorStore();
 
-  // Auto-refresh runtime log when playing
+  // Auto-refresh logs when playing
   useEffect(() => {
-    if (!isPlaying || activeTab !== 'runtime') return;
+    if (!isPlaying || (activeTab !== 'runtime' && activeTab !== 'console')) return;
     const interval = setInterval(() => {
       setLogRefresh(r => r + 1);
     }, 500);
     return () => clearInterval(interval);
   }, [isPlaying, activeTab]);
+
+  // Filter user logs for console tab
+  const userLogs = runtimeDebugLog.filter(entry => entry.type === 'user');
 
   const selectedScene = project?.scenes.find(s => s.id === selectedSceneId);
   const selectedObject = selectedScene?.objects.find(o => o.id === selectedObjectId);
@@ -30,6 +33,26 @@ export function DebugPanel() {
   const generatedCode = selectedObject?.blocklyXml
     ? generateCodeForObject(selectedObject.blocklyXml, selectedObject.id)
     : '// No blocks';
+
+  // Generate code for all objects in current scene
+  const generateAllCode = (): string => {
+    if (!selectedScene) return '// No scene selected';
+
+    const allCode: string[] = [];
+    for (const obj of selectedScene.objects) {
+      if (obj.blocklyXml) {
+        allCode.push(`// ========== ${obj.name} (${obj.id}) ==========`);
+        allCode.push(generateCodeForObject(obj.blocklyXml, obj.id));
+        allCode.push('');
+      }
+    }
+    return allCode.length > 0 ? allCode.join('\n') : '// No objects with code';
+  };
+
+  const copyAllCode = async () => {
+    const code = generateAllCode();
+    await navigator.clipboard.writeText(code);
+  };
 
   // Format XML for display
   const formattedXml = selectedObject?.blocklyXml
@@ -66,6 +89,9 @@ export function DebugPanel() {
           <TabButton active={activeTab === 'runtime'} onClick={() => setActiveTab('runtime')}>
             Runtime {isPlaying && <span className="ml-1 w-2 h-2 bg-green-500 rounded-full inline-block animate-pulse" />}
           </TabButton>
+          <TabButton active={activeTab === 'console'} onClick={() => setActiveTab('console')}>
+            Console {userLogs.length > 0 && <span className="ml-1 px-1.5 py-0.5 text-xs bg-purple-600 rounded-full">{userLogs.length}</span>}
+          </TabButton>
         </div>
         <button
           onClick={() => setIsOpen(false)}
@@ -97,7 +123,17 @@ export function DebugPanel() {
       {/* Content */}
       <div className="flex-1 overflow-auto p-4 font-mono text-xs">
         {activeTab === 'code' && (
-          <pre className="whitespace-pre-wrap text-green-300">{generatedCode}</pre>
+          <div className="space-y-2">
+            <div className="flex justify-end mb-2">
+              <button
+                onClick={copyAllCode}
+                className="px-2 py-1 text-xs bg-gray-700 rounded hover:bg-gray-600"
+              >
+                Copy All Code
+              </button>
+            </div>
+            <pre className="whitespace-pre-wrap text-green-300">{generatedCode}</pre>
+          </div>
         )}
         {activeTab === 'xml' && (
           <pre className="whitespace-pre-wrap text-blue-300">{formattedXml}</pre>
@@ -139,13 +175,37 @@ export function DebugPanel() {
                 Clear
               </button>
             </div>
-            {runtimeDebugLog.length === 0 ? (
+            {runtimeDebugLog.filter(e => e.type !== 'user').length === 0 ? (
               <div className="text-gray-500">No logs yet. Press Play to start.</div>
             ) : (
               <div className="space-y-1">
-                {runtimeDebugLog.slice(-50).map((entry, i) => (
+                {runtimeDebugLog.filter(e => e.type !== 'user').slice(-50).map((entry, i) => (
                   <div key={i} className={`text-xs ${getLogColor(entry.type)}`}>
                     <span className="text-gray-500">[{entry.type}]</span> {entry.message}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {activeTab === 'console' && (
+          <div className="space-y-2">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-purple-400 font-bold">Console Output</span>
+              <button
+                onClick={() => { clearDebugLog(); setLogRefresh(r => r + 1); }}
+                className="px-2 py-1 text-xs bg-gray-700 rounded hover:bg-gray-600"
+              >
+                Clear
+              </button>
+            </div>
+            {userLogs.length === 0 ? (
+              <div className="text-gray-500">No console output yet. Use the "console log" block to print messages.</div>
+            ) : (
+              <div className="space-y-1">
+                {userLogs.slice(-100).map((entry, i) => (
+                  <div key={i} className="text-sm text-purple-300 font-mono">
+                    {entry.message}
                   </div>
                 ))}
               </div>

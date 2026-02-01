@@ -155,6 +155,16 @@ export function registerCodeGenerators(): void {
     return `while (!(${condition})) {\n${statements}  await runtime.wait(0);\n}\n`;
   };
 
+  javascriptGenerator.forBlock['control_for_each'] = function(block) {
+    const list = javascriptGenerator.valueToCode(block, 'LIST', Order.ATOMIC) || '[]';
+    const statements = javascriptGenerator.statementToCode(block, 'DO');
+    return `for (const __currentItem__ of (${list} || [])) {\n${statements}}\n`;
+  };
+
+  javascriptGenerator.forBlock['control_current_item'] = function() {
+    return ['__currentItem__', Order.ATOMIC];
+  };
+
   javascriptGenerator.forBlock['control_wait_until'] = function(block) {
     const condition = javascriptGenerator.valueToCode(block, 'CONDITION', Order.ATOMIC) || 'false';
     return `while (!(${condition})) { await runtime.wait(0); }\n`;
@@ -332,6 +342,20 @@ export function registerCodeGenerators(): void {
     return ['runtime.getTouchingObject(sprite.id)', Order.FUNCTION_CALL];
   };
 
+  javascriptGenerator.forBlock['sensing_is_clone_of'] = function(block) {
+    const obj = javascriptGenerator.valueToCode(block, 'OBJECT', Order.ATOMIC) || 'null';
+    const targetId = block.getFieldValue('TARGET');
+    if (targetId === 'MYSELF') {
+      // Use original object ID (handles case when sprite is itself a clone)
+      return [`runtime.isCloneOf(${obj}, sprite.cloneParentId || sprite.id)`, Order.FUNCTION_CALL];
+    }
+    return [`runtime.isCloneOf(${obj}, '${targetId}')`, Order.FUNCTION_CALL];
+  };
+
+  javascriptGenerator.forBlock['sensing_all_touching_objects'] = function() {
+    return ['runtime.getAllTouchingObjects(sprite.id)', Order.FUNCTION_CALL];
+  };
+
   javascriptGenerator.forBlock['sensing_object_x'] = function(block) {
     const obj = javascriptGenerator.valueToCode(block, 'OBJECT', Order.ATOMIC) || 'null';
     return [`(${obj}?.getX() ?? 0)`, Order.FUNCTION_CALL];
@@ -381,7 +405,12 @@ export function registerCodeGenerators(): void {
   };
 
   javascriptGenerator.forBlock['control_delete_clone'] = function() {
-    return 'runtime.deleteClone(sprite.id);\n';
+    return 'runtime.deleteSelf(sprite.id);\n';
+  };
+
+  javascriptGenerator.forBlock['control_delete_object'] = function(block) {
+    const obj = javascriptGenerator.valueToCode(block, 'OBJECT', Order.ATOMIC) || 'null';
+    return `runtime.deleteObject(${obj});\n`;
   };
 
 
@@ -442,19 +471,36 @@ export function registerCodeGenerators(): void {
   // --- Typed Variable generators ---
 
   javascriptGenerator.forBlock['typed_variable_get'] = function(block) {
-    const varId = block.getFieldValue('VAR');
-    // Use variable ID to get value - runtime will resolve name from store
-    return [`runtime.getTypedVariable('${varId}', sprite.id)`, Order.ATOMIC];
+    try {
+      const varId = block.getFieldValue('VAR') || '';
+      // If no variable is selected (empty ID), return 0 as a safe default
+      if (!varId) {
+        return ['0 /* no variable selected */', Order.ATOMIC];
+      }
+      // Use variable ID to get value - runtime will resolve name from store
+      return [`runtime.getTypedVariable('${varId}', sprite.id)`, Order.ATOMIC];
+    } catch (e) {
+      console.error('Error in typed_variable_get generator:', e);
+      return ['0 /* error */', Order.ATOMIC];
+    }
   };
 
   javascriptGenerator.forBlock['typed_variable_set'] = function(block) {
-    const varId = block.getFieldValue('VAR');
+    const varId = block.getFieldValue('VAR') || '';
+    // If no variable is selected, skip the operation
+    if (!varId) {
+      return '/* no variable selected */\n';
+    }
     const value = javascriptGenerator.valueToCode(block, 'VALUE', Order.ASSIGNMENT) || '0';
     return `runtime.setTypedVariable('${varId}', ${value}, sprite.id);\n`;
   };
 
   javascriptGenerator.forBlock['typed_variable_change'] = function(block) {
-    const varId = block.getFieldValue('VAR');
+    const varId = block.getFieldValue('VAR') || '';
+    // If no variable is selected, skip the operation
+    if (!varId) {
+      return '/* no variable selected */\n';
+    }
     const delta = javascriptGenerator.valueToCode(block, 'DELTA', Order.ASSIGNMENT) || '1';
     return `runtime.changeTypedVariable('${varId}', ${delta}, sprite.id);\n`;
   };
@@ -490,13 +536,32 @@ const HAT_BLOCKS = [
 export function generateCodeForObject(blocklyXml: string, objectId: string): string {
   if (!blocklyXml) return '';
 
+  let workspace: Blockly.Workspace | null = null;
   try {
     // Create a hidden workspace to load the XML
-    const workspace = new Blockly.Workspace();
-    Blockly.Xml.domToWorkspace(
-      Blockly.utils.xml.textToDom(blocklyXml),
-      workspace
-    );
+    workspace = new Blockly.Workspace();
+
+    // Parse XML
+    let xmlDom;
+    try {
+      xmlDom = Blockly.utils.xml.textToDom(blocklyXml);
+    } catch (parseError) {
+      console.error('XML parsing error for object', objectId, parseError);
+      return '';
+    }
+
+    // Load into workspace
+    try {
+      Blockly.Xml.domToWorkspace(xmlDom, workspace);
+    } catch (loadError) {
+      console.error('Workspace load error for object', objectId, loadError);
+      workspace.dispose();
+      return '';
+    }
+
+    // IMPORTANT: Initialize the generator with the workspace before generating code
+    // This is required for blocks that use provideFunction_ (like math_random_int)
+    javascriptGenerator.init(workspace);
 
     // Get only top-level hat blocks (event blocks)
     const topBlocks = workspace.getTopBlocks(false);
@@ -505,12 +570,20 @@ export function generateCodeForObject(blocklyXml: string, objectId: string): str
     // Generate code only for hat blocks
     let code = '';
     for (const block of hatBlocks) {
-      const blockCode = javascriptGenerator.blockToCode(block);
-      if (blockCode) {
-        // blockToCode returns [code, order] for value blocks, just code for statement blocks
-        code += typeof blockCode === 'string' ? blockCode : blockCode[0];
+      try {
+        const blockCode = javascriptGenerator.blockToCode(block);
+        if (blockCode) {
+          // blockToCode returns [code, order] for value blocks, just code for statement blocks
+          code += typeof blockCode === 'string' ? blockCode : blockCode[0];
+        }
+      } catch (genError) {
+        console.error('Block code generation error for block', block.type, 'in object', objectId, genError);
       }
     }
+
+    // IMPORTANT: Call finish() to get helper function definitions (like mathRandomInt)
+    // This prepends any required helper functions to the code
+    code = javascriptGenerator.finish(code);
 
     // Clean up
     workspace.dispose();
@@ -527,6 +600,9 @@ ${code}
 })`;
   } catch (e) {
     console.error('Code generation error for object', objectId, e);
+    if (workspace) {
+      try { workspace.dispose(); } catch { /* ignore */ }
+    }
     return '';
   }
 }

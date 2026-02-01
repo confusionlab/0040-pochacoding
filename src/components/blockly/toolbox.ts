@@ -49,6 +49,59 @@ class PreservingFieldDropdown extends Blockly.FieldDropdown {
   }
 }
 
+// Custom FieldDropdown for variables that preserves unknown values
+class VariableFieldDropdown extends Blockly.FieldDropdown {
+  // Override doClassValidation_ to accept any value
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  protected override doClassValidation_(newValue?: any): string | null {
+    // Always accept the value - we'll handle unknown values in getText
+    if (newValue === null || newValue === undefined) {
+      return null;
+    }
+    return String(newValue);
+  }
+
+  // Override getText to show a friendly name for unknown values
+  override getText(): string {
+    const value = this.getValue();
+    if (!value) return '(no variable)';
+
+    // Check if value is in current options
+    const options = this.getOptions(false);
+    for (const option of options) {
+      if (option[1] === value && typeof option[0] === 'string') {
+        return option[0];
+      }
+    }
+
+    // Value not in options - try to find the variable name from the project
+    const project = useProjectStore.getState().project;
+    const selectedSceneId = useEditorStore.getState().selectedSceneId;
+    const selectedObjectId = useEditorStore.getState().selectedObjectId;
+
+    if (project) {
+      // Check global variables
+      const globalVar = project.globalVariables?.find(v => v.id === value);
+      if (globalVar) {
+        return `${getTypeIcon(globalVar.type)} ${globalVar.name}`;
+      }
+
+      // Check local variables
+      if (selectedSceneId && selectedObjectId) {
+        const scene = project.scenes.find(s => s.id === selectedSceneId);
+        const obj = scene?.objects.find(o => o.id === selectedObjectId);
+        const localVar = obj?.localVariables?.find(v => v.id === value);
+        if (localVar) {
+          return `(local) ${getTypeIcon(localVar.type)} ${localVar.name}`;
+        }
+      }
+    }
+
+    // Still not found - show placeholder
+    return '(unknown variable)';
+  }
+}
+
 // Store reference to the field being picked for (so callback can update it)
 let pendingPickerField: Blockly.FieldDropdown | null = null;
 
@@ -147,7 +200,7 @@ function getAllObjectsDropdownOptions(includePicker: boolean = true): Array<[str
 }
 
 // Dropdown with special options + objects
-function getTargetDropdownOptions(includeEdge: boolean = false, includeMouse: boolean = false): () => Array<[string, string]> {
+function getTargetDropdownOptions(includeEdge: boolean = false, includeMouse: boolean = false, includeMyClones: boolean = false): () => Array<[string, string]> {
   return function() {
     const specialOptions: Array<[string, string]> = [];
     if (includeEdge) {
@@ -155,6 +208,9 @@ function getTargetDropdownOptions(includeEdge: boolean = false, includeMouse: bo
     }
     if (includeMouse) {
       specialOptions.push(['mouse', 'MOUSE']);
+    }
+    if (includeMyClones) {
+      specialOptions.push(['myself (cloned)', 'MY_CLONES']);
     }
 
     const objectOptions = getObjectDropdownOptions(true);
@@ -408,14 +464,22 @@ export function getToolboxConfig(): any {
             }
           },
           { kind: 'block', type: 'control_repeat_until' },
+          { kind: 'block', type: 'control_for_each' },
+          { kind: 'block', type: 'control_current_item' },
           { kind: 'block', type: 'control_wait_until' },
           { kind: 'block', type: 'event_forever' },
           { kind: 'block', type: 'controls_if' },
+          {
+            kind: 'block',
+            type: 'controls_if',
+            extraState: { hasElse: true },
+          },
           { kind: 'block', type: 'control_stop' },
           { kind: 'block', type: 'control_switch_scene' },
           { kind: 'block', type: 'control_clone' },
           { kind: 'block', type: 'control_clone_object' },
           { kind: 'block', type: 'control_delete_clone' },
+          { kind: 'block', type: 'control_delete_object' },
           { kind: 'block', type: 'control_broadcast' },
           { kind: 'block', type: 'control_broadcast_wait' },
         ],
@@ -432,6 +496,8 @@ export function getToolboxConfig(): any {
           { kind: 'block', type: 'sensing_touching' },
           { kind: 'block', type: 'sensing_touching_ground' },
           { kind: 'block', type: 'sensing_touching_object' },
+          { kind: 'block', type: 'sensing_all_touching_objects' },
+          { kind: 'block', type: 'sensing_is_clone_of' },
           { kind: 'block', type: 'sensing_distance_to' },
           { kind: 'block', type: 'sensing_object_x' },
           { kind: 'block', type: 'sensing_object_y' },
@@ -899,6 +965,30 @@ function registerCustomBlocks() {
     }
   };
 
+  Blockly.Blocks['control_for_each'] = {
+    init: function() {
+      this.appendValueInput('LIST')
+        .setCheck('Array')
+        .appendField('for each');
+      this.appendStatementInput('DO')
+        .setCheck(null);
+      this.setPreviousStatement(true, null);
+      this.setNextStatement(true, null);
+      this.setColour('#FFBF00');
+      this.setTooltip('Run the code inside for each item in the list. Use "current item" block to refer to each item.');
+    }
+  };
+
+  Blockly.Blocks['control_current_item'] = {
+    init: function() {
+      this.appendDummyInput()
+        .appendField('current item');
+      this.setOutput(true, null);
+      this.setColour('#FFBF00');
+      this.setTooltip('Use inside "for each" loop to get the current item');
+    }
+  };
+
   Blockly.Blocks['control_wait_until'] = {
     init: function() {
       this.appendValueInput('CONDITION')
@@ -983,7 +1073,7 @@ function registerCustomBlocks() {
     init: function() {
       this.appendDummyInput()
         .appendField('touching')
-        .appendField(new PreservingFieldDropdown(getTargetDropdownOptions(true, false)), 'TARGET')
+        .appendField(new PreservingFieldDropdown(getTargetDropdownOptions(true, false, true)), 'TARGET')
         .appendField('?');
       this.setOutput(true, 'Boolean');
       this.setColour('#5CB1D6');
@@ -1021,10 +1111,44 @@ function registerCustomBlocks() {
   Blockly.Blocks['sensing_touching_object'] = {
     init: function() {
       this.appendDummyInput()
-        .appendField('touching object');
+        .appendField("object I'm touching");
       this.setOutput(true, 'Object');
       this.setColour('#5CB1D6');
       this.setTooltip('Returns the object this sprite is touching, or null if not touching anything');
+    }
+  };
+
+  Blockly.Blocks['sensing_is_clone_of'] = {
+    init: function() {
+      this.appendValueInput('OBJECT')
+        .setCheck('Object');
+      this.appendDummyInput()
+        .appendField('is clone of')
+        .appendField(new Blockly.FieldDropdown(() => {
+          const options: [string, string][] = [['myself', 'MYSELF']];
+          const project = (window as unknown as { __POCHA_PROJECT__?: { scenes: Array<{ objects: Array<{ id: string; name: string }> }> } }).__POCHA_PROJECT__;
+          if (project) {
+            for (const scene of project.scenes) {
+              for (const obj of scene.objects) {
+                options.push([obj.name, obj.id]);
+              }
+            }
+          }
+          return options.length > 0 ? options : [['(no objects)', '']];
+        }), 'TARGET');
+      this.setOutput(true, 'Boolean');
+      this.setColour('#5CB1D6');
+      this.setTooltip('Check if an object is a clone of the specified object');
+    }
+  };
+
+  Blockly.Blocks['sensing_all_touching_objects'] = {
+    init: function() {
+      this.appendDummyInput()
+        .appendField("all objects I'm touching");
+      this.setOutput(true, 'Array');
+      this.setColour('#5CB1D6');
+      this.setTooltip('Returns a list of all objects that I\'m currently touching');
     }
   };
 
@@ -1478,7 +1602,7 @@ function registerCustomBlocks() {
     init: function() {
       this.appendDummyInput()
         .appendField('when touching')
-        .appendField(new PreservingFieldDropdown(getTargetDropdownOptions(true, false)), 'TARGET');
+        .appendField(new PreservingFieldDropdown(getTargetDropdownOptions(true, false, true)), 'TARGET');
       this.appendStatementInput('NEXT')
         .setCheck(null);
       this.setColour('#FFAB19');
@@ -1531,10 +1655,23 @@ function registerCustomBlocks() {
   Blockly.Blocks['control_delete_clone'] = {
     init: function() {
       this.appendDummyInput()
-        .appendField('delete this clone');
+        .appendField('delete myself');
       this.setPreviousStatement(true, null);
       this.setColour('#FFBF00');
-      this.setTooltip('Delete this clone');
+      this.setTooltip('Delete this object');
+    }
+  };
+
+  Blockly.Blocks['control_delete_object'] = {
+    init: function() {
+      this.appendValueInput('OBJECT')
+        .setCheck('Object')
+        .appendField('delete');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true, null);
+      this.setNextStatement(true, null);
+      this.setColour('#FFBF00');
+      this.setTooltip('Delete the specified object/clone');
     }
   };
 
@@ -1647,7 +1784,7 @@ function registerCustomBlocks() {
   Blockly.Blocks['typed_variable_get'] = {
     init: function() {
       this.appendDummyInput()
-        .appendField(new Blockly.FieldDropdown(() => getVariableDropdownOptions()), 'VAR');
+        .appendField(new VariableFieldDropdown(() => getVariableDropdownOptions()), 'VAR');
       this.setOutput(true, 'Number'); // Default to number, will be updated by onchange
       this.setColour('#FF8C1A');
       this.setTooltip('Get the value of a variable');
@@ -1666,7 +1803,7 @@ function registerCustomBlocks() {
     init: function() {
       this.appendValueInput('VALUE')
         .appendField('set')
-        .appendField(new Blockly.FieldDropdown(() => getVariableDropdownOptions()), 'VAR')
+        .appendField(new VariableFieldDropdown(() => getVariableDropdownOptions()), 'VAR')
         .appendField('to');
       this.setPreviousStatement(true, null);
       this.setNextStatement(true, null);
@@ -1687,7 +1824,7 @@ function registerCustomBlocks() {
     init: function() {
       this.appendValueInput('DELTA')
         .appendField('change')
-        .appendField(new Blockly.FieldDropdown(() => getNumericVariableDropdownOptions()), 'VAR')
+        .appendField(new VariableFieldDropdown(() => getNumericVariableDropdownOptions()), 'VAR')
         .appendField('by');
       this.setPreviousStatement(true, null);
       this.setNextStatement(true, null);
@@ -1742,7 +1879,8 @@ function getAllVariables(): Variable[] {
 
   if (!project) return [];
 
-  const variables: Variable[] = [...project.globalVariables];
+  // Handle older projects that might not have globalVariables
+  const variables: Variable[] = [...(project.globalVariables || [])];
 
   // Add local variables from current object
   if (selectedSceneId && selectedObjectId) {

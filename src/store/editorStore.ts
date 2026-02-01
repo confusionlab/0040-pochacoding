@@ -28,6 +28,9 @@ interface EditorStore {
   // Debug state
   showColliderOutlines: boolean;
 
+  // Theme state
+  isDarkMode: boolean;
+
   // View state
   zoom: number;
   panX: number;
@@ -72,6 +75,9 @@ interface EditorStore {
   // Debug actions
   setShowColliderOutlines: (show: boolean) => void;
 
+  // Theme actions
+  toggleDarkMode: () => void;
+
   // Undo/Redo registration
   registerCostumeUndo: (handler: UndoRedoHandler | null) => void;
   registerCodeUndo: (handler: UndoRedoHandler | null) => void;
@@ -91,6 +97,19 @@ export const useEditorStore = create<EditorStore>((set) => ({
 
   // Debug state
   showColliderOutlines: false,
+
+  // Theme state - check localStorage and system preference
+  isDarkMode: (() => {
+    const stored = localStorage.getItem('pochacoding-dark-mode');
+    if (stored !== null) {
+      const isDark = stored === 'true';
+      document.documentElement.classList.toggle('dark', isDark);
+      return isDark;
+    }
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.classList.toggle('dark', prefersDark);
+    return prefersDark;
+  })(),
 
   // View state
   zoom: 1,
@@ -181,6 +200,13 @@ export const useEditorStore = create<EditorStore>((set) => ({
 
   setShowColliderOutlines: (show) => {
     set({ showColliderOutlines: show });
+  },
+
+  toggleDarkMode: () => {
+    const newValue = !useEditorStore.getState().isDarkMode;
+    document.documentElement.classList.toggle('dark', newValue);
+    localStorage.setItem('pochacoding-dark-mode', String(newValue));
+    set({ isDarkMode: newValue });
   },
 
   registerCostumeUndo: (handler) => {

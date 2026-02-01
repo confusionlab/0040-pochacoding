@@ -36,6 +36,7 @@ interface ProjectStore {
   // Variable actions (local - per object)
   addLocalVariable: (sceneId: string, objectId: string, variable: Variable) => void;
   removeLocalVariable: (sceneId: string, objectId: string, variableId: string) => void;
+  updateLocalVariable: (sceneId: string, objectId: string, variableId: string, updates: Partial<Variable>) => void;
 
   // Legacy aliases
   addVariable: (variable: Variable) => void;
@@ -469,6 +470,36 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                   objects: s.objects.map(o =>
                     o.id === objectId
                       ? { ...o, localVariables: (o.localVariables || []).filter(v => v.id !== variableId) }
+                      : o
+                  ),
+                }
+              : s
+          ),
+          updatedAt: new Date(),
+        },
+        isDirty: true,
+      };
+    });
+  },
+
+  updateLocalVariable: (sceneId: string, objectId: string, variableId: string, updates: Partial<Variable>) => {
+    set(state => {
+      if (!state.project) return state;
+      return {
+        project: {
+          ...state.project,
+          scenes: state.project.scenes.map(s =>
+            s.id === sceneId
+              ? {
+                  ...s,
+                  objects: s.objects.map(o =>
+                    o.id === objectId
+                      ? {
+                          ...o,
+                          localVariables: (o.localVariables || []).map(v =>
+                            v.id === variableId ? { ...v, ...updates } : v
+                          ),
+                        }
                       : o
                   ),
                 }

@@ -4,13 +4,13 @@ import { useProjectStore } from '@/store/projectStore';
 import { useEditorStore } from '@/store/editorStore';
 import { downloadProject } from '@/db/database';
 import { Button } from '@/components/ui/button';
-import { Play, Square, Upload, Save, Library } from 'lucide-react';
+import { Play, Square, Upload, Save, Library, Sun, Moon } from 'lucide-react';
 import { MediaLibrary } from '@/components/library/MediaLibrary';
 
 export function Toolbar() {
   const navigate = useNavigate();
   const { project, isDirty, saveCurrentProject, closeProject } = useProjectStore();
-  const { isPlaying, startPlaying, stopPlaying } = useEditorStore();
+  const { isPlaying, startPlaying, stopPlaying, isDarkMode, toggleDarkMode } = useEditorStore();
   const [showLibrary, setShowLibrary] = useState(false);
 
   const handleGoHome = () => {
@@ -78,6 +78,15 @@ export function Toolbar() {
 
       {/* Right section - Actions */}
       <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleDarkMode}
+          title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {isDarkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
+        </Button>
+
         <Button
           variant="ghost"
           size="sm"

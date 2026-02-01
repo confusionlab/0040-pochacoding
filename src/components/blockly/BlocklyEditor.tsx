@@ -5,6 +5,7 @@ import { useProjectStore } from '@/store/projectStore';
 import { useEditorStore } from '@/store/editorStore';
 import { getToolboxConfig, registerTypedVariablesCategory, setAddVariableCallback } from './toolbox';
 import { AddVariableDialog } from '@/components/dialogs/AddVariableDialog';
+import { VariableManagerDialog } from '@/components/dialogs/VariableManagerDialog';
 import { BlockSearchModal } from './BlockSearchModal';
 import type { UndoRedoHandler } from '@/store/editorStore';
 import type { Variable } from '@/types';
@@ -19,6 +20,7 @@ export function BlocklyEditor() {
   const currentObjectIdRef = useRef<string | null>(null);
   const isLoadingRef = useRef(false);
   const [showAddVariableDialog, setShowAddVariableDialog] = useState(false);
+  const [showVariableManager, setShowVariableManager] = useState(false);
   const [showBlockSearch, setShowBlockSearch] = useState(false);
 
   const { selectedSceneId, selectedObjectId, registerCodeUndo } = useEditorStore();
@@ -202,10 +204,17 @@ export function BlocklyEditor() {
         onAdd={handleAddVariable}
         objectName={currentObjectName}
       />
+      <VariableManagerDialog
+        open={showVariableManager}
+        onOpenChange={setShowVariableManager}
+        onAddNew={() => setShowAddVariableDialog(true)}
+      />
       <BlockSearchModal
         isOpen={showBlockSearch}
         onClose={() => setShowBlockSearch(false)}
         workspace={workspaceRef.current}
+        onNewVariable={() => setShowAddVariableDialog(true)}
+        onManageVariables={() => setShowVariableManager(true)}
       />
     </>
   );

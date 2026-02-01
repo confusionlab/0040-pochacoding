@@ -975,8 +975,9 @@ function createPlayScene(
 
       // Set up Matter.js to sync container position with body
       // Subtract the collider offset to get the container position
+      // Skip for static bodies - they shouldn't move due to physics
       scene.matter.world.on('afterupdate', () => {
-        if (body && container.active) {
+        if (body && container.active && !body.isStatic) {
           const offsetX = container.getData('colliderOffsetX') ?? 0;
           const offsetY = container.getData('colliderOffsetY') ?? 0;
           container.setPosition(body.position.x - offsetX, body.position.y - offsetY);
@@ -997,6 +998,10 @@ function createPlayScene(
 
       // Set body type (static bodies don't move)
       if (physics.bodyType === 'static') {
+        // Zero out all velocity and angular velocity
+        scene.matter.body.setVelocity(body, { x: 0, y: 0 });
+        scene.matter.body.setAngularVelocity(body, 0);
+        // Make the body static - it will no longer respond to forces or collisions
         scene.matter.body.setStatic(body, true);
       }
 
@@ -1011,6 +1016,9 @@ function createPlayScene(
       body.gravityScale = { x: 0, y: gravityValue };
       console.log(`[Physics] Object "${obj.name}" gravity scale set to: ${gravityValue}`);
     }
+
+    // Save template for cloning (captures initial design-time state)
+    runtime.saveTemplate(obj.id);
 
     // Generate and execute code for this object (use effective blocklyXml)
     const blocklyXml = effectiveProps.blocklyXml;
