@@ -820,7 +820,16 @@ function registerCustomBlocks() {
       this.appendValueInput('SECONDS')
         .setCheck('Number');
       this.appendDummyInput()
-        .appendField('seconds');
+        .appendField('sec')
+        .appendField(new Blockly.FieldDropdown([
+          ['linear', 'Linear'],
+          ['ease in', 'Quad.easeIn'],
+          ['ease out', 'Quad.easeOut'],
+          ['ease in-out', 'Quad.easeInOut'],
+          ['bounce', 'Bounce.easeOut'],
+          ['elastic', 'Elastic.easeOut'],
+          ['back', 'Back.easeOut'],
+        ]), 'EASING');
       this.setInputsInline(true);
       this.setPreviousStatement(true, null);
       this.setNextStatement(true, null);
@@ -1795,11 +1804,20 @@ function registerCustomBlocks() {
         .setCheck('Number')
         .appendField('rotate');
       this.appendDummyInput()
-        .appendField('degrees in');
+        .appendField('° in');
       this.appendValueInput('SECONDS')
         .setCheck('Number');
       this.appendDummyInput()
-        .appendField('seconds');
+        .appendField('sec')
+        .appendField(new Blockly.FieldDropdown([
+          ['linear', 'Linear'],
+          ['ease in', 'Quad.easeIn'],
+          ['ease out', 'Quad.easeOut'],
+          ['ease in-out', 'Quad.easeInOut'],
+          ['bounce', 'Bounce.easeOut'],
+          ['elastic', 'Elastic.easeOut'],
+          ['back', 'Back.easeOut'],
+        ]), 'EASING');
       this.setInputsInline(true);
       this.setPreviousStatement(true, null);
       this.setNextStatement(true, null);

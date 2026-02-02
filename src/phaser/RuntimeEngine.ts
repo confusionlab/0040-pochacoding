@@ -1666,7 +1666,7 @@ export class RuntimeEngine {
   /**
    * Glide sprite to position over duration
    */
-  glideTo(spriteId: string, userX: number, userY: number, durationSeconds: number): Promise<void> {
+  glideTo(spriteId: string, userX: number, userY: number, durationSeconds: number, easing: string = 'Linear'): Promise<void> {
     return new Promise(resolve => {
       const sprite = this.sprites.get(spriteId);
       if (!sprite) {
@@ -1690,18 +1690,18 @@ export class RuntimeEngine {
         x: phaserX,
         y: phaserY,
         duration: durationSeconds * 1000,
-        ease: 'Linear',
+        ease: easing,
         onComplete: () => resolve(),
       });
 
-      debugLog('action', `Gliding "${sprite.name}" to (${userX}, ${userY}) over ${durationSeconds}s`);
+      debugLog('action', `Gliding "${sprite.name}" to (${userX}, ${userY}) over ${durationSeconds}s with ${easing}`);
     });
   }
 
   /**
    * Rotate sprite by degrees over duration
    */
-  rotateTo(spriteId: string, degrees: number, durationSeconds: number): Promise<void> {
+  rotateTo(spriteId: string, degrees: number, durationSeconds: number, easing: string = 'Linear'): Promise<void> {
     return new Promise(resolve => {
       const sprite = this.sprites.get(spriteId);
       if (!sprite) {
@@ -1723,11 +1723,11 @@ export class RuntimeEngine {
         targets: container,
         angle: targetAngle,
         duration: durationSeconds * 1000,
-        ease: 'Linear',
+        ease: easing,
         onComplete: () => resolve(),
       });
 
-      debugLog('action', `Rotating "${sprite.name}" by ${degrees}° over ${durationSeconds}s`);
+      debugLog('action', `Rotating "${sprite.name}" by ${degrees}° over ${durationSeconds}s with ${easing}`);
     });
   }
 }
