@@ -78,6 +78,103 @@ function registerCrossObjectCopyPaste() {
 // Register once at module load
 registerCrossObjectCopyPaste();
 
+// Block types that have object reference dropdowns
+const OBJECT_REFERENCE_BLOCKS: Record<string, string> = {
+  'sensing_touching': 'TARGET',
+  'sensing_distance_to': 'TARGET',
+  'sensing_touching_object': 'TARGET',
+  'motion_point_towards': 'TARGET',
+  'camera_follow_object': 'TARGET',
+  'control_clone_object': 'TARGET',
+  'event_when_touching': 'TARGET',
+  'motion_attach_to_dropdown': 'TARGET',
+  'motion_attach_dropdown_to_me': 'TARGET',
+};
+
+// Block types that have sound reference dropdowns
+const SOUND_REFERENCE_BLOCKS: Record<string, string> = {
+  'sound_play': 'SOUND',
+  'sound_play_until_done': 'SOUND',
+};
+
+// Block types that have variable reference dropdowns
+const VARIABLE_REFERENCE_BLOCKS: Record<string, string> = {
+  'typed_variable_get': 'VAR',
+  'typed_variable_set': 'VAR',
+  'typed_variable_change': 'VAR',
+};
+
+// Special values that are always valid (not object IDs)
+const VALID_SPECIAL_VALUES = new Set(['EDGE', 'MOUSE', 'MY_CLONES', '']);
+
+// Validate all blocks in workspace for broken references
+function validateBlockReferences(
+  workspace: Blockly.WorkspaceSvg,
+  sceneObjectIds: Set<string>,
+  objectSoundIds: Set<string>,
+  validVariableIds: Set<string>
+) {
+  const allBlocks = workspace.getAllBlocks(false);
+
+  for (const block of allBlocks) {
+    const blockType = block.type;
+    let hasError = false;
+    const errors: string[] = [];
+
+    // Check object references
+    const objectFieldName = OBJECT_REFERENCE_BLOCKS[blockType];
+    if (objectFieldName) {
+      const fieldValue = block.getFieldValue(objectFieldName);
+      if (fieldValue && !VALID_SPECIAL_VALUES.has(fieldValue)) {
+        // Check if it's a component reference (starts with COMPONENT_ANY:)
+        if (fieldValue.startsWith('COMPONENT_ANY:')) {
+          // Component references are allowed
+        } else if (!sceneObjectIds.has(fieldValue)) {
+          hasError = true;
+          errors.push('Object not found in this scene');
+        }
+      }
+    }
+
+    // Check sound references
+    const soundFieldName = SOUND_REFERENCE_BLOCKS[blockType];
+    if (soundFieldName) {
+      const fieldValue = block.getFieldValue(soundFieldName);
+      if (fieldValue && fieldValue !== '' && !objectSoundIds.has(fieldValue)) {
+        hasError = true;
+        errors.push('Sound not found in this object');
+      }
+    }
+
+    // Check variable references
+    const variableFieldName = VARIABLE_REFERENCE_BLOCKS[blockType];
+    if (variableFieldName) {
+      const fieldValue = block.getFieldValue(variableFieldName);
+      if (fieldValue && fieldValue !== '' && !validVariableIds.has(fieldValue)) {
+        hasError = true;
+        errors.push('Variable not found');
+      }
+    }
+
+    // Apply visual feedback
+    if (hasError) {
+      block.setWarningText(errors.join('\n'));
+      // Store original color if not already stored
+      if (!block.data) {
+        block.data = block.getColour();
+      }
+      block.setColour('#CC0000'); // Red for error
+    } else {
+      block.setWarningText(null);
+      // Restore original color if it was stored
+      if (block.data) {
+        block.setColour(block.data);
+        block.data = null;
+      }
+    }
+  }
+}
+
 export function BlocklyEditor() {
   const containerRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<Blockly.WorkspaceSvg | null>(null);
@@ -190,7 +287,7 @@ export function BlocklyEditor() {
     // Set up callback for "Add Variable" button
     setAddVariableCallback(() => setShowAddVariableDialog(true));
 
-    // Save on changes
+    // Save on changes and validate references
     workspaceRef.current.addChangeListener((event) => {
       if (isLoadingRef.current) return;
       if (event.type === Blockly.Events.BLOCK_CHANGE ||
@@ -217,6 +314,28 @@ export function BlocklyEditor() {
           state.updateComponent(obj.componentId, { blocklyXml: xmlText });
         } else {
           state.updateObject(sceneId, objectId, { blocklyXml: xmlText });
+        }
+
+        // Validate references on block create/change
+        if (event.type === Blockly.Events.BLOCK_CREATE || event.type === Blockly.Events.BLOCK_CHANGE) {
+          const sceneObjectIds = new Set(scene.objects.map(o => o.id));
+
+          // Get effective sounds
+          let effectiveSounds: Array<{ id: string }> = obj.sounds || [];
+          if (obj.componentId) {
+            const component = (state.project?.components || []).find(c => c.id === obj.componentId);
+            if (component) {
+              effectiveSounds = component.sounds || [];
+            }
+          }
+          const objectSoundIds = new Set(effectiveSounds.map(s => s.id));
+
+          // Collect valid variable IDs
+          const validVariableIds = new Set<string>();
+          (state.project?.globalVariables || []).forEach(v => validVariableIds.add(v.id));
+          (obj.localVariables || []).forEach(v => validVariableIds.add(v.id));
+
+          validateBlockReferences(workspaceRef.current!, sceneObjectIds, objectSoundIds, validVariableIds);
         }
       }
     });
@@ -251,10 +370,12 @@ export function BlocklyEditor() {
 
     // Get effective blocklyXml (from component if it's an instance)
     let blocklyXml = obj?.blocklyXml || '';
+    let effectiveSounds: Array<{ id: string }> = obj?.sounds || [];
     if (obj?.componentId) {
       const component = (state.project?.components || []).find(c => c.id === obj.componentId);
       if (component) {
         blocklyXml = component.blocklyXml;
+        effectiveSounds = component.sounds || [];
       }
     }
 
@@ -265,6 +386,19 @@ export function BlocklyEditor() {
       } catch (e) {
         console.error('Failed to load Blockly XML:', e);
       }
+    }
+
+    // Validate blocks for broken references
+    if (scene && workspaceRef.current) {
+      const sceneObjectIds = new Set(scene.objects.map(o => o.id));
+      const objectSoundIds = new Set(effectiveSounds.map(s => s.id));
+
+      // Collect valid variable IDs (global + local)
+      const validVariableIds = new Set<string>();
+      (state.project?.globalVariables || []).forEach(v => validVariableIds.add(v.id));
+      (obj?.localVariables || []).forEach(v => validVariableIds.add(v.id));
+
+      validateBlockReferences(workspaceRef.current, sceneObjectIds, objectSoundIds, validVariableIds);
     }
 
     setTimeout(() => {
