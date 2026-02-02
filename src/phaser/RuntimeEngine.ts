@@ -1532,6 +1532,8 @@ export class RuntimeEngine {
   }
 
   // --- Attachment (Parent-Child relationships) ---
+  // Track parent-child relationships
+  private attachments: Map<string, string> = new Map(); // childId -> parentId
 
   /**
    * Attach a sprite to another sprite as a child
@@ -1555,19 +1557,49 @@ export class RuntimeEngine {
       return;
     }
 
-    // Store child's world position before reparenting
-    const worldX = childContainer.x;
-    const worldY = childContainer.y;
+    // If already attached to something, detach first
+    if (this.attachments.has(childId)) {
+      this.detach(childId);
+    }
 
-    // Remove child from scene and add to parent container
-    childContainer.setParentContainer(parentContainer);
+    // Get child's current world position
+    const childWorldMatrix = childContainer.getWorldTransformMatrix();
+    const childWorldX = childWorldMatrix.tx;
+    const childWorldY = childWorldMatrix.ty;
 
-    // Convert world position to local position relative to parent
-    const localX = worldX - parentContainer.x;
-    const localY = worldY - parentContainer.y;
+    // Get parent's world position
+    const parentWorldMatrix = parentContainer.getWorldTransformMatrix();
+    const parentWorldX = parentWorldMatrix.tx;
+    const parentWorldY = parentWorldMatrix.ty;
+
+    // Calculate local position relative to parent (accounting for parent's rotation and scale)
+    const parentAngle = parentContainer.angle * (Math.PI / 180);
+    const parentScaleX = parentContainer.scaleX;
+    const parentScaleY = parentContainer.scaleY;
+
+    // Offset from parent in world space
+    const offsetX = childWorldX - parentWorldX;
+    const offsetY = childWorldY - parentWorldY;
+
+    // Rotate offset back by parent's angle to get local coordinates
+    const cosAngle = Math.cos(-parentAngle);
+    const sinAngle = Math.sin(-parentAngle);
+    const localX = (offsetX * cosAngle - offsetY * sinAngle) / parentScaleX;
+    const localY = (offsetX * sinAngle + offsetY * cosAngle) / parentScaleY;
+
+    // Remove from scene's display list (but don't destroy)
+    this.scene.children.remove(childContainer);
+
+    // Add to parent container - this makes transformations inherit
+    parentContainer.add(childContainer);
+
+    // Set local position within parent
     childContainer.setPosition(localX, localY);
 
-    debugLog('action', `Attached "${child.name}" to "${parent.name}"`);
+    // Track the relationship
+    this.attachments.set(childId, parentId);
+
+    debugLog('action', `Attached "${child.name}" to "${parent.name}" at local (${localX.toFixed(1)}, ${localY.toFixed(1)})`);
   }
 
   /**
@@ -1583,21 +1615,38 @@ export class RuntimeEngine {
     const container = sprite.container;
     if (!container) return;
 
-    const parentContainer = container.parentContainer;
-    if (!parentContainer) {
+    const parentId = this.attachments.get(spriteId);
+    if (!parentId) {
       debugLog('info', `detach: "${sprite.name}" has no parent`);
       return;
     }
 
-    // Calculate world position
-    const worldPos = container.getWorldTransformMatrix();
-    const worldX = worldPos.tx;
-    const worldY = worldPos.ty;
+    const parent = this.sprites.get(parentId);
+    const parentContainer = parent?.container;
 
-    // Remove from parent and add back to scene
-    container.setParentContainer(null as unknown as Phaser.GameObjects.Container);
+    // Calculate world position before detaching
+    const worldMatrix = container.getWorldTransformMatrix();
+    const worldX = worldMatrix.tx;
+    const worldY = worldMatrix.ty;
+    const worldRotation = container.angle + (parentContainer?.angle || 0);
+    const worldScaleX = container.scaleX * (parentContainer?.scaleX || 1);
+    const worldScaleY = container.scaleY * (parentContainer?.scaleY || 1);
+
+    // Remove from parent container
+    if (parentContainer) {
+      parentContainer.remove(container);
+    }
+
+    // Add back to scene
     this.scene.add.existing(container);
+
+    // Restore world transform
     container.setPosition(worldX, worldY);
+    container.setAngle(worldRotation);
+    container.setScale(worldScaleX, worldScaleY);
+
+    // Remove tracking
+    this.attachments.delete(spriteId);
 
     debugLog('action', `Detached "${sprite.name}" from parent`);
   }
