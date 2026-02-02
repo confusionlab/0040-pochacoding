@@ -28,6 +28,12 @@ export const WaveformEditor = memo(({ sound, onTrimChange }: WaveformEditorProps
   const [trimEnd, setTrimEnd] = useState(0);
   const [isDragging, setIsDragging] = useState<'start' | 'end' | null>(null);
 
+  // Refs to avoid stale closures in audio event handlers
+  const trimStartRef = useRef(trimStart);
+  const trimEndRef = useRef(trimEnd);
+  trimStartRef.current = trimStart;
+  trimEndRef.current = trimEnd;
+
   // Load audio and generate waveform when sound changes
   useEffect(() => {
     if (!sound) {
@@ -52,26 +58,36 @@ export const WaveformEditor = memo(({ sound, onTrimChange }: WaveformEditorProps
 
     audio.onloadedmetadata = () => {
       const audioDuration = audio.duration;
+      console.log('[WaveformEditor] Audio loaded, duration:', audioDuration);
       setDuration(audioDuration);
-      setTrimStart(sound.trimStart ?? 0);
-      setTrimEnd(sound.trimEnd ?? audioDuration);
-      setCurrentTime(sound.trimStart ?? 0);
+      const startTime = sound.trimStart ?? 0;
+      const endTime = sound.trimEnd ?? audioDuration;
+      setTrimStart(startTime);
+      setTrimEnd(endTime);
+      setCurrentTime(startTime);
+      // Update refs immediately
+      trimStartRef.current = startTime;
+      trimEndRef.current = endTime;
+    };
+
+    audio.onerror = (e) => {
+      console.error('[WaveformEditor] Audio load error:', e);
     };
 
     audio.ontimeupdate = () => {
       setCurrentTime(audio.currentTime);
-      // Stop at trim end
-      if (audio.currentTime >= trimEnd) {
+      // Stop at trim end (use ref to avoid stale closure)
+      if (audio.currentTime >= trimEndRef.current) {
         audio.pause();
-        audio.currentTime = trimStart;
+        audio.currentTime = trimStartRef.current;
         setIsPlaying(false);
       }
     };
 
     audio.onended = () => {
       setIsPlaying(false);
-      audio.currentTime = trimStart;
-      setCurrentTime(trimStart);
+      audio.currentTime = trimStartRef.current;
+      setCurrentTime(trimStartRef.current);
     };
 
     // Generate waveform data
@@ -244,7 +260,10 @@ export const WaveformEditor = memo(({ sound, onTrimChange }: WaveformEditorProps
   const handleCanvasMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       const canvas = canvasRef.current;
-      if (!canvas || duration === 0) return;
+      if (!canvas || duration === 0) {
+        console.log('[WaveformEditor] MouseDown blocked - canvas:', !!canvas, 'duration:', duration);
+        return;
+      }
 
       const rect = canvas.getBoundingClientRect();
       const x = e.clientX - rect.left;
@@ -261,6 +280,7 @@ export const WaveformEditor = memo(({ sound, onTrimChange }: WaveformEditorProps
       } else {
         // Seek to position (only within trim region)
         const seekTime = Math.max(trimStart, Math.min(trimEnd, clickTime));
+        console.log('[WaveformEditor] Seeking to:', seekTime, 'audioRef:', !!audioRef.current);
         if (audioRef.current) {
           audioRef.current.currentTime = seekTime;
           setCurrentTime(seekTime);
