@@ -137,9 +137,11 @@ export async function deleteReusable(id: string): Promise<void> {
 
 // Export / Import
 
-// Current schema version - increment when project structure changes
+// Current schema version - increment when project structure changes (see CLAUDE.md)
 export const CURRENT_SCHEMA_VERSION = 1;
-export const APP_VERSION = '1.0.0';
+
+// App version - MUST match package.json version
+export const APP_VERSION = '0.1.0';
 
 // === Cloud Sync Functions ===
 
@@ -262,7 +264,7 @@ export function exportProject(project: Project): string {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     type: 'pochacoding-project',
     exportedAt: new Date().toISOString(),
-    appVersion: '1.0.0', // Update this when releasing new versions
+    appVersion: APP_VERSION,
     project,
   };
   return JSON.stringify(exportData, null, 2);

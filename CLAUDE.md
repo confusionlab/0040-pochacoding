@@ -66,25 +66,65 @@ Blockly Editor       │  Scene Tabs
 
 ### Commit Strategy
 
-**Commit after completing each major phase.** Reference the phase in commit message:
+**Commit immediately after each feature or bug fix.** Do not batch multiple changes into one commit.
 
+- One feature = one commit
+- One bug fix = one commit
+- Include descriptive commit messages explaining what changed and why
+
+### Versioning
+
+This project uses **three types of versions**:
+
+| Version | Location | Purpose |
+|---------|----------|---------|
+| **App Version** | `package.json` → `version` | Release version (semver) |
+| **Schema Version** | `src/db/database.ts` → `CURRENT_SCHEMA_VERSION` | Project data structure version |
+| **DB Version** | `src/db/database.ts` → Dexie `version()` | IndexedDB table/index structure |
+
+#### When to Increment Versions
+
+**App Version** (`package.json` AND `src/db/database.ts` → `APP_VERSION`):
+- Patch (0.0.X): Bug fixes
+- Minor (0.X.0): New features (backward compatible)
+- Major (X.0.0): Breaking changes
+- **Keep both locations in sync!**
+
+**Schema Version** (`CURRENT_SCHEMA_VERSION`):
+Increment when changing the structure of:
+- `Project`, `Scene`, `GameObject` interfaces in `src/types/index.ts`
+- Adding/removing/renaming fields that affect saved project files
+- Adding new block types that store data in new ways
+- **Must add migration function** in `database.ts` → `migrations` object
+
+```typescript
+// Example: Adding a migration when incrementing from v1 to v2
+const migrations: Record<number, MigrationFn> = {
+  2: (project) => {
+    // Migrate from v1 to v2
+    project.scenes.forEach(scene => {
+      scene.newField = scene.newField ?? 'default';
+    });
+    return project;
+  },
+};
 ```
-Phase 1: Foundation - Vite, Phaser, Blockly, IndexedDB setup
-Phase 2: Scene system and object management
-Phase 3: Basic Blockly blocks
-Phase 4: Code execution runtime
-Phase 5: Physics and camera
-Phase 6: Advanced features
-Phase 7: Reusable objects library
-Phase 8: Polish and UX
-```
+
+**DB Version** (Dexie):
+Increment when changing IndexedDB structure:
+- Adding new tables
+- Adding/removing indexes
+- Changing primary keys
 
 ### Adding New Blocks
 
-1. Add block definition in `src/components/blockly/toolbox.ts`
-2. Register in `registerCustomBlocks()` function
-3. Add to toolbox category in `getToolboxConfig()`
-4. (Phase 4+) Add code generator for runtime execution
+1. Add block definition in `src/components/blockly/toolbox.ts` → `registerCustomBlocks()`
+2. Add to toolbox category in `getToolboxConfig()`
+3. Add code generator in `src/phaser/CodeGenerator.ts`
+4. Add runtime method in `src/phaser/RuntimeEngine.ts` (if needed)
+5. **Commit after completing the block**
+
+Note: If the block stores new data in the project (e.g., new field in GameObject), increment `CURRENT_SCHEMA_VERSION`.
 
 ### Block Color Conventions
 
